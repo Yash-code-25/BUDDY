@@ -9,6 +9,7 @@ from django.urls import include, path, re_path
 
 from employee_portal.views import DemoSignInView
 from hr_portal.views import LoginView
+from notifications.views import daily
 
 from .frontend import frontend
 
@@ -18,6 +19,7 @@ urlpatterns = [
     path('api/auth/demo/', DemoSignInView.as_view()),  # development only
     path('api/hr/', include('hr_portal.urls')),
     path('api/portal/', include('employee_portal.urls')),
+    path('api/cron/daily/', daily),  # the daily job, for Vercel Cron (needs CRON_SECRET)
     path('api/', include('compass_app.urls')),
     re_path(r'^(?P<path>.*)$', frontend),
 ]

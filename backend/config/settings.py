@@ -12,19 +12,37 @@ if (BASE_DIR / '.env').exists():
         if sep and not line.lstrip().startswith('#'):
             os.environ.setdefault(name.strip(), value.strip())
 
-# Development settings - unsuitable for production
+def env_flag(name, default):
+    return os.environ.get(name, default).strip().lower() in ('1', 'true', 'yes', 'on')
 
-# SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure-4_$x-ck&b$!*5d+8z-h3=ll68fwi==55sf%cr*nsa&h$42w-+('
 
-# SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+def env_list(name):
+    return [item.strip() for item in os.environ.get(name, '').split(',') if item.strip()]
 
-ALLOWED_HOSTS = []
 
-# Only needed if you use `npm run dev` (Vite on port 5173) to edit the screens. It proxies /api to Django,
-# so its origin must be trusted for POSTs. Normal use is one server on port 8000 and needs none of this.
-CSRF_TRUSTED_ORIGINS = ['http://localhost:5173', 'http://127.0.0.1:5173']
+# Live (e.g. on Vercel) these come from the host's environment variables. Without them, COMPASS runs
+# as the development setup on a laptop: a development key, DEBUG on, localhost only.
+SECRET_KEY = os.environ.get('DJANGO_SECRET_KEY') or 'django-insecure-4_$x-ck&b$!*5d+8z-h3=ll68fwi==55sf%cr*nsa&h$42w-+('
+DEBUG = env_flag('DJANGO_DEBUG', 'True')
+
+# The addresses COMPASS answers on, e.g. "compass.united-group.in,.vercel.app". Empty means localhost
+# only (fine while DEBUG is on).
+ALLOWED_HOSTS = env_list('DJANGO_ALLOWED_HOSTS')
+
+# Sites allowed to send forms (sign in, save). The live addresses over HTTPS, plus `npm run dev`
+# (Vite on port 5173) for editing the screens on a laptop.
+CSRF_TRUSTED_ORIGINS = ['http://localhost:5173', 'http://127.0.0.1:5173'] + [
+    f"https://{'*' + host if host.startswith('.') else host}" for host in ALLOWED_HOSTS
+]
+
+if not DEBUG:
+    # Behind the host's HTTPS: trust its "this was HTTPS" header, and send cookies over HTTPS only.
+    SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+    SESSION_COOKIE_SECURE = True
+    CSRF_COOKIE_SECURE = True
+
+# On Vercel each request runs in a short-lived function (the VERCEL variable is set there).
+ON_VERCEL = bool(os.environ.get('VERCEL'))
 
 # Email. With no EMAIL_USER in backend/.env, emails are printed in the terminal running `runserver`
 # instead of sent (see MAILERS further down). With it, they are sent through that mail account.
@@ -32,7 +50,10 @@ DEFAULT_FROM_EMAIL = f"Team United <{os.environ.get('EMAIL_USER') or 'compass@un
 # Never email these domains: the demo people's addresses are made up (see seed_demo).
 EMAIL_SKIP_DOMAINS = ['test.com']
 ALERT_EMAIL = 'compass-admin@united-group.local'  # alerts go here when no Program admin has an email
-FRONTEND_URL = 'http://localhost:8000'     # base address used in links inside emails
+# The base address used in links inside emails, e.g. https://compass.united-group.in when live.
+FRONTEND_URL = os.environ.get('FRONTEND_URL', 'http://localhost:8000').rstrip('/')
+# Vercel's daily cron calls /api/cron/daily/ with this secret; without it the address refuses everyone.
+CRON_SECRET = os.environ.get('CRON_SECRET', '')
 
 # Development only: a list of every joiner and buddy under the login form, signing them in with one
 # click (no login code). It follows DEBUG, so it is off in production. Never set it True there.
@@ -61,6 +82,7 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
+    'whitenoise.middleware.WhiteNoiseMiddleware',  # serves the Django admin's styles when live
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
@@ -99,11 +121,17 @@ if os.environ.get('DATABASE_URL') and 'test' not in sys.argv:
     DATABASES = {
         'default': dj_database_url.parse(
             os.environ['DATABASE_URL'],
-            conn_max_age=60,          # reuse a connection for a minute instead of opening one per request
-            conn_health_checks=True,  # and check it is still alive before using it
+            # A normal server reuses a connection for a minute; a Vercel function closes it after each
+            # request, because many short-lived functions would otherwise hold too many open.
+            conn_max_age=0 if ON_VERCEL else 60,
+            conn_health_checks=True,  # check a reused connection is still alive before using it
             ssl_require=True,         # Supabase only accepts encrypted connections
         ),
     }
+    # Supabase's "Transaction pooler" (port 6543, the one to use on Vercel) cannot keep server-side
+    # cursors between statements.
+    if DATABASES['default'].get('PORT') in (6543, '6543'):
+        DATABASES['default']['DISABLE_SERVER_SIDE_CURSORS'] = True
 else:
     DATABASES = {'default': SQLITE}
 
@@ -137,6 +165,9 @@ USE_TZ = True
 # Static files (CSS, JavaScript, Images)
 
 STATIC_URL = 'static/'
+# The Django admin's styles. WhiteNoise serves them straight from the installed apps, so no
+# collectstatic step is needed on the host. (The React screens are separate, in frontend/dist.)
+WHITENOISE_USE_FINDERS = True
 
 # Sign-in attempts per minute from one address. Login codes are short, so guessing must be slow.
 REST_FRAMEWORK = {

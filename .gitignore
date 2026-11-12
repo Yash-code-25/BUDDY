@@ -7,3 +7,5 @@ frontend/dist/
 .vscode/
 .idea/
 backend/.env
+.claude/
+backend/staticfiles/
