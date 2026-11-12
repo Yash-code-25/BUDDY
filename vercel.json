@@ -3,6 +3,7 @@
   "installCommand": "npm --prefix frontend ci",
   "buildCommand": "npm --prefix frontend run build",
   "outputDirectory": "frontend/dist",
+  "regions": ["bom1"],
   "functions": {
     "api/index.py": {
       "includeFiles": "backend/**",
