@@ -89,14 +89,23 @@ TEMPLATES = [
 
 WSGI_APPLICATION = 'config.wsgi.application'
 
-# Database
+# Database. With DATABASE_URL in backend/.env (e.g. Supabase's "Session pooler" connection string),
+# COMPASS uses that PostgreSQL database; without it, the SQLite file next to manage.py. Tests always
+# use their own throwaway SQLite database, so they never touch the real one.
+SQLITE = {'ENGINE': 'django.db.backends.sqlite3', 'NAME': BASE_DIR / 'db.sqlite3'}
+if os.environ.get('DATABASE_URL') and 'test' not in sys.argv:
+    import dj_database_url
 
-DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
+    DATABASES = {
+        'default': dj_database_url.parse(
+            os.environ['DATABASE_URL'],
+            conn_max_age=60,          # reuse a connection for a minute instead of opening one per request
+            conn_health_checks=True,  # and check it is still alive before using it
+            ssl_require=True,         # Supabase only accepts encrypted connections
+        ),
     }
-}
+else:
+    DATABASES = {'default': SQLITE}
 
 # Password validation
 
