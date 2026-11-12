@@ -46,7 +46,10 @@ ON_VERCEL = bool(os.environ.get('VERCEL'))
 
 # Email. With no EMAIL_USER in backend/.env, emails are printed in the terminal running `runserver`
 # instead of sent (see MAILERS further down). With it, they are sent through that mail account.
-DEFAULT_FROM_EMAIL = f"Team United <{os.environ.get('EMAIL_USER') or 'compass@united-group.local'}>"
+# EMAIL_FROM is the address joiners see; it defaults to EMAIL_USER (right for Gmail). Services such
+# as SendGrid sign in with a fixed name ("apikey"), so set EMAIL_FROM to your verified sender there.
+EMAIL_FROM = os.environ.get('EMAIL_FROM') or os.environ.get('EMAIL_USER') or 'compass@united-group.local'
+DEFAULT_FROM_EMAIL = f"Team United <{EMAIL_FROM}>"
 # Never email these domains: the demo people's addresses are made up (see seed_demo).
 EMAIL_SKIP_DOMAINS = ['test.com']
 ALERT_EMAIL = 'compass-admin@united-group.local'  # alerts go here when no Program admin has an email
