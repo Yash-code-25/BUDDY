@@ -1,0 +1,25 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+@import "tailwindcss";
+
+/* The COMPASS colours: one calm blue on white and light greys. Change them here and the whole
+   app follows. */
+@theme {
+  --font-sans: 'Inter', ui-sans-serif, system-ui, sans-serif;
+
+  --color-brand: #1e5aa8;       /* buttons, links, the selected item */
+  --color-brand-dark: #174785;  /* hover on brand buttons */
+  --color-brand-soft: #e8f0fa;  /* tinted backgrounds behind brand text */
+  --color-ink: #0f1b2d;         /* headings and strong text */
+  --color-canvas: #f7f8fa;      /* the page behind the cards */
+  --color-success: #0e7a5a;     /* done, active, paired */
+  --color-success-soft: #e6f4ee;
+}
+
+body {
+  margin: 0;
+  background: var(--color-canvas);
+  color: #334155;
+  font-family: var(--font-sans);
+  font-feature-settings: 'cv11', 'ss01'; /* Inter's clearer 1, 4 and 6 */
+  -webkit-font-smoothing: antialiased;
+}
