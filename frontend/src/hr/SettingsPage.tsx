@@ -1,13 +1,64 @@
 import { useEffect, useState } from 'react'
 import type { ReactNode } from 'react'
 import { getSettings, saveSettings } from './api'
-import type { EmailSettings, SettingsData } from './api'
+import type { EmailSettings, NamedLink, SettingsData } from './api'
 import { useSubmit } from '../useSubmit'
 import { Field, Notice, PageTitle } from './ui'
-import { inputCls, panel, primary } from '../styles'
+import { inputCls, linkButton, panel, primary, secondary } from '../styles'
 
 type NumberKey = { [K in keyof SettingsData]: SettingsData[K] extends number ? K : never }[keyof SettingsData]
-type EmailTextKey = Exclude<keyof EmailSettings, 'office_details'>
+type LinkKey = 'handbook_links' | 'linkedin_links' | 'instagram_links'
+type EmailTextKey = Exclude<keyof EmailSettings, 'office_details' | LinkKey>
+
+const MAX_LINKS = 10 // the server allows this many per list
+
+/** A list of named links (the handbook, LinkedIn, Instagram): a name and a web address per row. */
+function LinkList(props: {
+  title: string
+  hint: string
+  namePlaceholder: string
+  links: NamedLink[]
+  onChange: (links: NamedLink[]) => void
+}) {
+  const { title, hint, namePlaceholder, links, onChange } = props
+  const set = (i: number, patch: Partial<NamedLink>) => onChange(links.map((l, n) => (n === i ? { ...l, ...patch } : l)))
+  return (
+    <div className="rounded-md border border-slate-200 bg-slate-50 p-3 sm:p-4">
+      <div className="text-sm font-medium text-slate-700">{title}</div>
+      <p className="mb-3 text-xs text-slate-500">{hint}</p>
+      {links.length === 0 && <p className="mb-3 text-sm text-slate-400">No links yet.</p>}
+      <ul className="space-y-3">
+        {links.map((link, i) => (
+          <li key={i} className="grid gap-2 sm:grid-cols-[12rem_1fr_auto] sm:items-center">
+            <input
+              className={inputCls}
+              aria-label={`${title} ${i + 1} name`}
+              placeholder={namePlaceholder}
+              value={link.label}
+              onChange={(e) => set(i, { label: e.target.value })}
+            />
+            <input
+              className={inputCls}
+              aria-label={`${title} ${i + 1} web address`}
+              placeholder="https://"
+              inputMode="url"
+              value={link.url}
+              onChange={(e) => set(i, { url: e.target.value })}
+            />
+            <button type="button" className={`${linkButton} justify-self-start px-1`} onClick={() => onChange(links.filter((_, n) => n !== i))}>
+              Remove
+            </button>
+          </li>
+        ))}
+      </ul>
+      {links.length < MAX_LINKS && (
+        <button type="button" className={`${secondary} mt-3`} onClick={() => onChange([...links, { label: '', url: '' }])}>
+          Add link
+        </button>
+      )}
+    </div>
+  )
+}
 
 type NumberSetting = { key: NumberKey; label: string; hint: string }
 
@@ -134,11 +185,29 @@ export default function SettingsPage() {
           </EmailCard>
 
           <EmailCard number={3} title="Get to know United Group" when={`${COMPANY_DAYS} days before`}>
-            <div className="grid gap-4 sm:grid-cols-2">
+            <div className="grid gap-4">
               {textField('story_video_link', 'Our story video link', 'The Watch our story button.')}
-              {textField('handbook_link', 'Pre-joining handbook link', 'A link to the handbook PDF, e.g. on SharePoint.')}
-              {textField('linkedin_link', 'LinkedIn page')}
-              {textField('instagram_link', 'Instagram page')}
+              <LinkList
+                title="Pre-joining handbook"
+                hint="One link shows as a button; several show as a list, each by its name. E.g. PDFs on SharePoint."
+                namePlaceholder="e.g. Code of conduct"
+                links={form.handbook_links}
+                onChange={(handbook_links) => update({ handbook_links })}
+              />
+              <LinkList
+                title="LinkedIn pages"
+                hint='"You can also follow us on LinkedIn (…)". The name is optional.'
+                namePlaceholder="e.g. United Group"
+                links={form.linkedin_links}
+                onChange={(linkedin_links) => update({ linkedin_links })}
+              />
+              <LinkList
+                title="Instagram pages"
+                hint="Shown next to LinkedIn. The name is optional."
+                namePlaceholder="e.g. Life at United"
+                links={form.instagram_links}
+                onChange={(instagram_links) => update({ instagram_links })}
+              />
             </div>
           </EmailCard>
 

@@ -54,6 +54,22 @@ def _where_and_when(joiner: Joiner, s: Settings) -> str:
     return "## Where and when\n" + "\n".join(lines) + "\n\n"
 
 
+def _handbook_links(links: list) -> str:
+    """One handbook link is a button; several are a list of links, each by its name."""
+    if len(links) == 1:
+        return f"[[{links[0]['label'] or 'Open the handbook'}|{links[0]['url']}]]"
+    return "\n".join(f"• [{link['label'] or f'Handbook part {n}'}]({link['url']})"
+                     for n, link in enumerate(links, start=1))
+
+
+def _social(name: str, links: list) -> str:
+    """"[LinkedIn](url)" for one unnamed page, else "LinkedIn ([United Group](url), [Careers](url))"."""
+    if len(links) == 1 and not links[0]["label"]:
+        return f"[{name}]({links[0]['url']})"
+    pages = ", ".join(f"[{link['label'] or f'page {n}'}]({link['url']})" for n, link in enumerate(links, start=1))
+    return f"{name} ({pages})"
+
+
 def _buddy_name(joiner: Joiner):
     pairing = current_pairing(joiner)
     return pairing.buddy.name if pairing else None
@@ -93,9 +109,10 @@ def company(joiner, s, today):
         "## Your pre-joining handbook\n"
         "We've put together a short handbook with the essentials: who we are, what we do, how we work, and "
         "who's who. Read it whenever suits you; there's no test.\n\n"
-        f"[[Open the handbook|{s.handbook_link}]]\n\n"
-    ) if s.handbook_link else ""
-    links = [f"[{name}]({link})" for name, link in (("LinkedIn", s.linkedin_link), ("Instagram", s.instagram_link)) if link]
+        f"{_handbook_links(s.handbook_links)}\n\n"
+    ) if s.handbook_links else ""
+    links = [_social(name, found) for name, found in (("LinkedIn", s.linkedin_links), ("Instagram", s.instagram_links))
+             if found]
     social = f"You can also follow us on {' and '.join(links)} to see what we're up to.\n\n" if links else ""
     body = (
         "Before you join us, we'd love you to get to know the company you're becoming part of.\n\n"

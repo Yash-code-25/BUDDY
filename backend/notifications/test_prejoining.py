@@ -86,13 +86,41 @@ class FiveEmailTests(TestCase):
 
     def test_the_company_email_has_the_story_and_handbook(self):
         s = Settings.load()
-        s.story_video_link, s.handbook_link = "https://v.example/story", "https://h.example/book"
+        s.story_video_link = "https://v.example/story"
+        s.handbook_links = [{"label": "", "url": "https://h.example/book"}]
         s.save()
         prejoining.company(joiner(30), s, TODAY)
         html = mail.outbox[-1].alternatives[0][0]
         for text in ("Watch our story", "https://v.example/story", "Open the handbook", "https://h.example/book",
                      "What we stand for"):
             self.assertIn(text, html)
+
+    def test_several_handbook_and_social_links_all_show_by_name(self):
+        s = Settings.load()
+        s.handbook_links = [{"label": f"Part {n}", "url": f"https://h.example/{n}"} for n in range(1, 5)]
+        s.linkedin_links = [{"label": "United Group", "url": "https://li.example/a"},
+                            {"label": "Careers", "url": "https://li.example/b"}]
+        s.instagram_links = [{"label": "", "url": "https://ig.example/a"}, {"label": "", "url": "https://ig.example/b"}]
+        s.save()
+        prejoining.company(joiner(30), s, TODAY)
+        html = mail.outbox[-1].alternatives[0][0]
+        for n in range(1, 5):
+            self.assertIn(f'href="https://h.example/{n}"', html)
+            self.assertIn(f"Part {n}", html)
+        for text in ("United Group</a>", "Careers</a>", "https://ig.example/a", "https://ig.example/b", "page 2</a>"):
+            self.assertIn(text, html)
+
+    def test_settings_save_link_lists_and_drop_empty_rows(self):
+        admin = get_user_model().objects.create_user("links-admin", password="pw", is_staff=True)
+        self.client.force_login(admin)
+        data = self.client.get("/api/hr/settings/").json()
+        data["handbook_links"] = [{"label": "Policies", "url": " https://h.example/p "}, {"label": "", "url": ""}]
+        r = self.client.put("/api/hr/settings/", data, content_type="application/json")
+        self.assertEqual(r.status_code, 200)
+        self.assertEqual(r.json()["handbook_links"], [{"label": "Policies", "url": "https://h.example/p"}])
+        data["linkedin_links"] = [{"label": "Careers", "url": ""}]
+        r = self.client.put("/api/hr/settings/", data, content_type="application/json")
+        self.assertEqual(r.status_code, 400)
 
     def test_a_joiner_added_before_the_series_existed_gets_none_of_it(self):
         person = joiner(20)

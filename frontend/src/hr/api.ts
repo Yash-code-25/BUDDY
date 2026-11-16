@@ -175,13 +175,16 @@ export type SettingsData = {
 /** What the pre-joining emails show. A blank one leaves its line out of the email. */
 export type EmailSettings = {
   story_video_link: string
-  handbook_link: string
-  linkedin_link: string
-  instagram_link: string
+  handbook_links: NamedLink[]
+  linkedin_links: NamedLink[]
+  instagram_links: NamedLink[]
   dress_code: string
   contact_phone: string
   office_details: Record<string, Office> // by location
 }
+
+/** One link in an email: a name ("Code of conduct") and its web address. */
+export type NamedLink = { label: string; url: string }
 
 /** Where a location's joiners go on Day 1. */
 export type Office = { address?: string; map_link?: string }

@@ -57,9 +57,10 @@ class Settings(models.Model):
 
     # What the pre-joining emails show. A blank one leaves its line out of the email.
     story_video_link = models.CharField(max_length=500, blank=True)
-    handbook_link = models.CharField(max_length=500, blank=True)
-    linkedin_link = models.CharField(max_length=500, blank=True)
-    instagram_link = models.CharField(max_length=500, blank=True)
+    # Each a list of {"label": "Code of conduct", "url": "https://…"}, in the order the emails show them.
+    handbook_links = models.JSONField(default=list, blank=True)
+    linkedin_links = models.JSONField(default=list, blank=True)
+    instagram_links = models.JSONField(default=list, blank=True)
     dress_code = models.CharField(
         max_length=300, blank=True, default="Business casual. Closed, comfortable footwear.")
     contact_phone = models.CharField(max_length=50, blank=True)

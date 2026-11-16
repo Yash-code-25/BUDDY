@@ -51,7 +51,8 @@ LABELS = {
     "source": "Chosen by", "reason": "Reason", "note": "Note", "tier_reached": "Result",
     "intro": "Introduction", "manual_cutoff_day": "Questions due (days before joining)",
     "candidates_per_tier": "Buddies shown per tier", "story_video_link": "Our story video link",
-    "handbook_link": "Handbook link", "contact_phone": "Phone for Day 1 changes", "dress_code": "What to wear",
+    "handbook_links": "Handbook links", "linkedin_links": "LinkedIn links", "instagram_links": "Instagram links",
+"contact_phone": "Phone for Day 1 changes", "dress_code": "What to wear",
     "office_details": "Office by location", "joiner_intro": "Joiner welcome text",
     "buddy_intro": "Buddy welcome text", "end_date": "Ended on", "owner": "With",
     "created": "Added", "updated": "Updated", "errors": "Rows with errors", "removed": "Removed",
@@ -79,7 +80,8 @@ def _value(key, value, buddies):
     if isinstance(value, bool):
         return "Yes" if value else "No"
     if isinstance(value, list):
-        return ", ".join(str(v) for v in value)
+        # a list of named links shows each by its name (or its address when it has none)
+        return ", ".join(v.get("label") or v.get("url", "") if isinstance(v, dict) else str(v) for v in value)
     if isinstance(value, dict):
         return "updated"
     text = str(value)

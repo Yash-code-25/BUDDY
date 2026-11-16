@@ -69,13 +69,39 @@ INT_FIELDS = {
 }
 TEXT_FIELDS = ["joiner_intro", "buddy_intro"]
 # What the pre-joining emails show. These may be blank: the email then leaves that line out.
-EMAIL_FIELDS = [
-    "story_video_link", "handbook_link", "linkedin_link", "instagram_link",
-    "dress_code", "contact_phone",
-]
+EMAIL_FIELDS = ["story_video_link", "dress_code", "contact_phone"]
+# Lists of named links for the "Get to know United Group" email: {field: what the admin calls it}.
+LINK_FIELDS = {"handbook_links": "Handbook", "linkedin_links": "LinkedIn", "instagram_links": "Instagram"}
+MAX_LINKS = 10
+LINK_LIMITS = {"label": 100, "url": 500}
 LIST_FIELDS = {"departments": ("department", "Departments"), "locations": ("location", "Locations")}
-ALL_FIELDS = [*INT_FIELDS, *TEXT_FIELDS, *EMAIL_FIELDS, *LIST_FIELDS, "office_details"]
+ALL_FIELDS = [*INT_FIELDS, *TEXT_FIELDS, *EMAIL_FIELDS, *LINK_FIELDS, *LIST_FIELDS, "office_details"]
 OFFICE_LIMITS = {"address": 300, "map_link": 500}
+
+
+def clean_links(value, label) -> list:
+    """[{label, url}] in the admin's order. Empty rows are dropped; a name needs its web address."""
+    if not isinstance(value, list):
+        raise ValidationError(f"{label} links must be a list.")
+    links = []
+    for number, item in enumerate(value, start=1):
+        if not isinstance(item, dict):
+            raise ValidationError(f"{label} link {number} is not valid.")
+        link = {}
+        for field, limit in LINK_LIMITS.items():
+            text = str(item.get(field, "") or "").strip()
+            if len(text) > limit:
+                raise ValidationError(f"{label} link {number}: the {'name' if field == 'label' else 'web address'} "
+                                      f"can be at most {limit} characters.")
+            link[field] = text
+        if not link["url"]:
+            if link["label"]:
+                raise ValidationError(f"{label} link {number} ({link['label']}) needs a web address.")
+            continue
+        links.append(link)
+    if len(links) > MAX_LINKS:
+        raise ValidationError(f"{label}: at most {MAX_LINKS} links.")
+    return links
 
 
 def clean_offices(value, locations) -> dict:
@@ -151,6 +177,9 @@ class SettingsView(AdminView):
             if limit and len(text) > limit:
                 raise ValidationError(f"{field.replace('_', ' ').capitalize()} can be at most {limit} characters.")
             new[field] = text
+
+        for field, label in LINK_FIELDS.items():
+            new[field] = clean_links(request.data.get(field, before[field]), label)
 
         for field, (person_field, label) in LIST_FIELDS.items():
             new[field] = clean_list(request.data.get(field, before[field]), person_field, label)
