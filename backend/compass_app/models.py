@@ -56,8 +56,8 @@ class Settings(models.Model):
     locations = models.JSONField(default=default_locations)
 
     # What the pre-joining emails show. A blank one leaves its line out of the email.
-    story_video_link = models.CharField(max_length=500, blank=True)
     # Each a list of {"label": "Code of conduct", "url": "https://…"}, in the order the emails show them.
+    story_video_links = models.JSONField(default=list, blank=True)
     handbook_links = models.JSONField(default=list, blank=True)
     linkedin_links = models.JSONField(default=list, blank=True)
     instagram_links = models.JSONField(default=list, blank=True)

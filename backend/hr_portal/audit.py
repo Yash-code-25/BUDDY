@@ -50,7 +50,7 @@ LABELS = {
     "status": "Status", "compass_status": "Status", "pool_status": "Pool status", "buddy": "Buddy",
     "source": "Chosen by", "reason": "Reason", "note": "Note", "tier_reached": "Result",
     "intro": "Introduction", "manual_cutoff_day": "Questions due (days before joining)",
-    "candidates_per_tier": "Buddies shown per tier", "story_video_link": "Our story video link",
+    "candidates_per_tier": "Buddies shown per tier", "story_video_links": "Our story videos",
     "handbook_links": "Handbook links", "linkedin_links": "LinkedIn links", "instagram_links": "Instagram links",
 "contact_phone": "Phone for Day 1 changes", "dress_code": "What to wear",
     "office_details": "Office by location", "joiner_intro": "Joiner welcome text",

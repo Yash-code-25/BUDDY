@@ -54,11 +54,12 @@ def _where_and_when(joiner: Joiner, s: Settings) -> str:
     return "## Where and when\n" + "\n".join(lines) + "\n\n"
 
 
-def _handbook_links(links: list) -> str:
-    """One handbook link is a button; several are a list of links, each by its name."""
+def _link_buttons(links: list, button: str, unnamed: str) -> str:
+    """One link is a button (its name, or `button`); several are a list of links, each by its name
+    (or "`unnamed` 2")."""
     if len(links) == 1:
-        return f"[[{links[0]['label'] or 'Open the handbook'}|{links[0]['url']}]]"
-    return "\n".join(f"• [{link['label'] or f'Handbook part {n}'}]({link['url']})"
+        return f"[[{links[0]['label'] or button}|{links[0]['url']}]]"
+    return "\n".join(f"• [{link['label'] or f'{unnamed} {n}'}]({link['url']})"
                      for n, link in enumerate(links, start=1))
 
 
@@ -100,16 +101,18 @@ def welcome(joiner, s, today):
 
 def company(joiner, s, today):
     """3. Our story, values and handbook: 14 days before joining."""
+    videos = s.story_video_links
     story = (
         "## Our story\n"
-        "This short video shows where we started, what we build today, and where we're headed.\n\n"
-        f"[[Watch our story|{s.story_video_link}]]\n\n"
-    ) if s.story_video_link else ""
+        + ("This short video shows" if len(videos) == 1 else "These short videos show")
+        + " where we started, what we build today, and where we're headed.\n\n"
+        f"{_link_buttons(videos, 'Watch our story', 'Video')}\n\n"
+    ) if videos else ""
     handbook = (
         "## Your pre-joining handbook\n"
         "We've put together a short handbook with the essentials: who we are, what we do, how we work, and "
         "who's who. Read it whenever suits you; there's no test.\n\n"
-        f"{_handbook_links(s.handbook_links)}\n\n"
+        f"{_link_buttons(s.handbook_links, 'Open the handbook', 'Handbook part')}\n\n"
     ) if s.handbook_links else ""
     links = [_social(name, found) for name, found in (("LinkedIn", s.linkedin_links), ("Instagram", s.instagram_links))
              if found]

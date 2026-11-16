@@ -69,9 +69,10 @@ INT_FIELDS = {
 }
 TEXT_FIELDS = ["joiner_intro", "buddy_intro"]
 # What the pre-joining emails show. These may be blank: the email then leaves that line out.
-EMAIL_FIELDS = ["story_video_link", "dress_code", "contact_phone"]
+EMAIL_FIELDS = ["dress_code", "contact_phone"]
 # Lists of named links for the "Get to know United Group" email: {field: what the admin calls it}.
-LINK_FIELDS = {"handbook_links": "Handbook", "linkedin_links": "LinkedIn", "instagram_links": "Instagram"}
+LINK_FIELDS = {"story_video_links": "Story video", "handbook_links": "Handbook", "linkedin_links": "LinkedIn",
+               "instagram_links": "Instagram"}
 MAX_LINKS = 10
 LINK_LIMITS = {"label": 100, "url": 500}
 LIST_FIELDS = {"departments": ("department", "Departments"), "locations": ("location", "Locations")}

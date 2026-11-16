@@ -174,7 +174,7 @@ export type SettingsData = {
 
 /** What the pre-joining emails show. A blank one leaves its line out of the email. */
 export type EmailSettings = {
-  story_video_link: string
+  story_video_links: NamedLink[]
   handbook_links: NamedLink[]
   linkedin_links: NamedLink[]
   instagram_links: NamedLink[]

@@ -7,7 +7,7 @@ import { Field, Notice, PageTitle } from './ui'
 import { inputCls, linkButton, panel, primary, secondary } from '../styles'
 
 type NumberKey = { [K in keyof SettingsData]: SettingsData[K] extends number ? K : never }[keyof SettingsData]
-type LinkKey = 'handbook_links' | 'linkedin_links' | 'instagram_links'
+type LinkKey = 'story_video_links' | 'handbook_links' | 'linkedin_links' | 'instagram_links'
 type EmailTextKey = Exclude<keyof EmailSettings, 'office_details' | LinkKey>
 
 const MAX_LINKS = 10 // the server allows this many per list
@@ -186,7 +186,13 @@ export default function SettingsPage() {
 
           <EmailCard number={3} title="Get to know United Group" when={`${COMPANY_DAYS} days before`}>
             <div className="grid gap-4">
-              {textField('story_video_link', 'Our story video link', 'The Watch our story button.')}
+              <LinkList
+                title="Our story videos"
+                hint="One video shows as a Watch our story button; several show as a list, each by its name."
+                namePlaceholder="e.g. Our journey"
+                links={form.story_video_links}
+                onChange={(story_video_links) => update({ story_video_links })}
+              />
               <LinkList
                 title="Pre-joining handbook"
                 hint="One link shows as a button; several show as a list, each by its name. E.g. PDFs on SharePoint."
