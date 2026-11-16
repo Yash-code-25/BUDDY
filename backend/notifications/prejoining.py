@@ -54,13 +54,31 @@ def _where_and_when(joiner: Joiner, s: Settings) -> str:
     return "## Where and when\n" + "\n".join(lines) + "\n\n"
 
 
-def _link_buttons(links: list, button: str, unnamed: str) -> str:
-    """One link is a button (its name, or `button`); several are a list of links, each by its name
-    (or "`unnamed` 2")."""
+def _card(icon, title, caption, url, action) -> str:
+    """One card line for render.py. A "|" would split the card, so names lose it and addresses encode it."""
+    clean = [str(x).replace("|", "/").replace("}}", "} }") for x in (icon, title, caption)]
+    return f"{{{{card|{clean[0]}|{clean[1]}|{clean[2]}|{url.replace('|', '%7C')}|{action}}}}}"
+
+
+def _video_cards(links: list) -> str:
+    """Each story video as a card with a play icon: its name, "Video 2 of 4" under it, and Watch."""
+    total = len(links)
+    return "\n".join(
+        _card("▶", link["label"] or ("Our story" if total == 1 else f"Video {n}"),
+              f"Video {n} of {total}" if total > 1 else "A short film about United Group", link["url"], "Watch")
+        for n, link in enumerate(links, start=1)
+    )
+
+
+def _handbook_links(links: list) -> str:
+    """One handbook link is a button; several are numbered cards, each by its name."""
     if len(links) == 1:
-        return f"[[{links[0]['label'] or button}|{links[0]['url']}]]"
-    return "\n".join(f"• [{link['label'] or f'{unnamed} {n}'}]({link['url']})"
-                     for n, link in enumerate(links, start=1))
+        return f"[[{links[0]['label'] or 'Open the handbook'}|{links[0]['url']}]]"
+    total = len(links)
+    return "\n".join(
+        _card(str(n), link["label"] or f"Handbook part {n}", f"Part {n} of {total}", link["url"], "Open")
+        for n, link in enumerate(links, start=1)
+    )
 
 
 def _social(name: str, links: list) -> str:
@@ -106,13 +124,13 @@ def company(joiner, s, today):
         "## Our story\n"
         + ("This short video shows" if len(videos) == 1 else "These short videos show")
         + " where we started, what we build today, and where we're headed.\n\n"
-        f"{_link_buttons(videos, 'Watch our story', 'Video')}\n\n"
+        f"{_video_cards(videos)}\n\n"
     ) if videos else ""
     handbook = (
         "## Your pre-joining handbook\n"
         "We've put together a short handbook with the essentials: who we are, what we do, how we work, and "
         "who's who. Read it whenever suits you; there's no test.\n\n"
-        f"{_link_buttons(s.handbook_links, 'Open the handbook', 'Handbook part')}\n\n"
+        f"{_handbook_links(s.handbook_links)}\n\n"
     ) if s.handbook_links else ""
     links = [_social(name, found) for name, found in (("LinkedIn", s.linkedin_links), ("Instagram", s.instagram_links))
              if found]

@@ -6,6 +6,9 @@ The text marks its own layout, so each email reads naturally where it is written
     • item                a bullet (a run of them is one list)
     1. item               a numbered item
     [[Label|https://…]]   a button, on a line of its own
+    {{card|▶|Title|Caption|https://…|Watch}}
+                          a card: a round icon, a bold title with a small caption under it, and an
+                          action on the right, all linking to the address (caption may be empty)
     [text](https://…)     a link inside a sentence
     **text**              bold
 
@@ -19,6 +22,8 @@ INK = "#0f1b2d"
 TEXT = "#334155"
 
 BUTTON = re.compile(r"^\[\[(.+?)\|(.+?)\]\]$")
+CARD = re.compile(r"^\{\{card\|(.*?)\|(.+?)\|(.*?)\|(.+?)\|(.+?)\}\}$")
+MUTED = "#64748b"
 LINK = re.compile(r"\[([^\]]+)\]\(([^)\s]+)\)")
 BOLD = re.compile(r"\*\*(.+?)\*\*")
 NUMBERED = re.compile(r"^(\d+)\. (.*)$")
@@ -38,6 +43,30 @@ def _inline_text(text: str) -> str:
     return BOLD.sub(r"\1", LINK.sub(lambda m: f"{m[1]} ({m[2]})", text))
 
 
+def _card_html(icon, title, caption, url, action) -> str:
+    """A link as a card. Tables, not flexbox, so it holds together in Outlook and Gmail too."""
+    href = escape(url)
+    link = "text-decoration:none"
+    under = (f'<div style="margin-top:2px;font-size:13px;color:{MUTED}">{escape(caption)}</div>'
+             if caption else "")
+    return (
+        '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" '
+        'style="margin:0 0 10px;border:1px solid #e2e8f0;border-radius:8px;background:#f8fafc">'
+        '<tr>'
+        '<td width="40" style="padding:12px 0 12px 14px;vertical-align:middle">'
+        f'<a href="{href}" style="{link};display:inline-block;width:32px;height:32px;line-height:32px;'
+        f'border-radius:16px;background:{BRAND};color:#ffffff;text-align:center;font-size:13px;'
+        f'font-weight:bold">{escape(icon)}</a></td>'
+        '<td style="padding:12px 12px;vertical-align:middle;line-height:1.35">'
+        f'<a href="{href}" style="{link};color:{INK};font-weight:bold;font-size:15px">{escape(title)}</a>'
+        f'{under}</td>'
+        '<td align="right" style="padding:12px 14px 12px 0;vertical-align:middle;white-space:nowrap">'
+        f'<a href="{href}" style="{link};color:{BRAND};font-weight:bold;font-size:14px">'
+        f'{escape(action)}&nbsp;&rsaquo;</a></td>'
+        '</tr></table>'
+    )
+
+
 def _html_block(lines: list) -> str:
     """One paragraph: headings, lists, buttons and plain lines, in the order written."""
     parts, plain, items, kind = [], [], [], None
@@ -54,8 +83,12 @@ def _html_block(lines: list) -> str:
 
     for line in lines:
         button = BUTTON.match(line)
+        card = CARD.match(line)
         numbered = NUMBERED.match(line)
-        if line.startswith("## "):
+        if card:
+            flush()
+            parts.append(_card_html(*card.groups()))
+        elif line.startswith("## "):
             flush()
             parts.append(f'<h3 style="margin:22px 0 8px;font-size:16px;color:{INK}">{_inline_html(line[3:])}</h3>')
         elif button:
@@ -79,6 +112,10 @@ def _html_block(lines: list) -> str:
 
 
 def _text_line(line: str) -> str:
+    card = CARD.match(line)
+    if card:
+        icon, title, caption, url, _ = card.groups()
+        return f"• {title}" + (f" ({caption})" if caption else "") + f": {url}"
     button = BUTTON.match(line)
     if button:
         return f"{button[1]}: {button[2]}"

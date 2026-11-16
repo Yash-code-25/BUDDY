@@ -91,9 +91,10 @@ class FiveEmailTests(TestCase):
         s.save()
         prejoining.company(joiner(30), s, TODAY)
         html = mail.outbox[-1].alternatives[0][0]
-        for text in ("Watch our story", "https://v.example/story", "Open the handbook", "https://h.example/book",
-                     "What we stand for"):
+        for text in ("Our story</a>", "Watch&nbsp;", 'href="https://v.example/story"', "Open the handbook",
+                     "https://h.example/book", "What we stand for"):
             self.assertIn(text, html)
+        self.assertIn("• Our story (A short film about United Group): https://v.example/story", mail.outbox[-1].body)
 
     def test_several_handbook_and_social_links_all_show_by_name(self):
         s = Settings.load()
@@ -191,6 +192,24 @@ class RenderTests(TestCase):
         self.assertIn("<ul", html)
         self.assertIn('href="https://x.y/z"', html)
         self.assertIn("<strong>bold</strong>", html)
+
+    def test_a_card_has_its_icon_title_caption_and_action_all_linked(self):
+        text, html = render("{{card|▶|Our <journey>|Video 1 of 4|https://v.example/1|Watch}}")
+        self.assertEqual(html.count('href="https://v.example/1"'), 3)
+        for part in ("▶", "Our &lt;journey&gt;", "Video 1 of 4", "Watch&nbsp;&rsaquo;"):
+            self.assertIn(part, html)
+        self.assertEqual(text.strip(), "• Our <journey> (Video 1 of 4): https://v.example/1")
+
+    def test_a_pipe_in_a_name_does_not_break_the_card(self):
+        s = Settings.load()
+        s.story_video_links = [{"label": "Us | Them", "url": "https://v.example/1"},
+                               {"label": "", "url": "https://v.example/2"}]
+        s.save()
+        prejoining.company(joiner(30), s, TODAY)
+        html = mail.outbox[-1].alternatives[0][0]
+        self.assertIn("Us / Them</a>", html)
+        self.assertIn("Video 2</a>", html)
+        self.assertNotIn("{{card", html)
 
     def test_text_is_escaped_in_html(self):
         self.assertIn("&lt;script&gt;", render("<script>")[1])
