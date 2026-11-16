@@ -12,6 +12,13 @@ if (BASE_DIR / '.env').exists():
         if sep and not line.lstrip().startswith('#'):
             os.environ.setdefault(name.strip(), value.strip())
 
+# A value pasted into the host's settings often brings a space or line break with it, which breaks
+# sign-in to the mail server or the database. Trim them all.
+for _name in ('EMAIL_USER', 'EMAIL_PASSWORD', 'EMAIL_HOST', 'EMAIL_PORT', 'EMAIL_FROM', 'DATABASE_URL',
+              'DJANGO_SECRET_KEY', 'FRONTEND_URL', 'CRON_SECRET'):
+    if _name in os.environ:
+        os.environ[_name] = os.environ[_name].strip()
+
 def env_flag(name, default):
     return os.environ.get(name, default).strip().lower() in ('1', 'true', 'yes', 'on')
 
