@@ -211,8 +211,8 @@ class Joiner(Employee):
     date_of_joining = models.DateField()
     compass_status = models.CharField(max_length=25, choices=Status.choices, default=Status.AWAITING_ASSESSMENT)
     token = models.UUIDField(default=uuid.uuid4, unique=True, editable=False)  # their quiz page address
-    # The day the "time to answer" email went out (or the admin re-sent it). The quiz stays open
-    # for one week from then.
+    # The day the admin last sent a reminder. A short-notice joiner's answer-by day counts from it.
+    # The questions themselves never close.
     quiz_link_sent_on = models.DateField(null=True, blank=True)
     notes = models.TextField(blank=True)
     # The day the Program admin added them. Their pre-joining emails follow from it; joiners added
@@ -227,7 +227,6 @@ class Joiner(Employee):
     directions = models.CharField(max_length=300, blank=True)
     attendance_confirmed_at = models.DateTimeField(null=True, blank=True)  # "Yes, I'll be there"
 
-    QUIZ_LINK_VALID_DAYS = 7
     SHORT_NOTICE_DAYS = 10  # added this close to joining: the short-notice emails
     SHORT_NOTICE_QUIZ_DAYS = 2  # and the quiz is due this many days after its email
 
@@ -253,11 +252,6 @@ class Joiner(Employee):
             Response.objects.filter(joiner=self, assessment_code=Response.Code.JOINER, submitted_at__isnull=False)
             .select_related("question_set").order_by("-submitted_at").first()
         )
-
-    def quiz_link_expired(self, today) -> bool:
-        if self.quiz_link_sent_on is None:
-            return False
-        return today > self.quiz_link_sent_on + timedelta(days=self.QUIZ_LINK_VALID_DAYS)
 
 
 class Response(models.Model):

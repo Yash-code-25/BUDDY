@@ -2,7 +2,7 @@ from datetime import date, timedelta
 
 from rest_framework.test import APITestCase
 
-from .models import Buddy, Joiner, Response
+from .models import Buddy, Joiner, MatchRun, Response
 from .testing import make_question_set
 
 
@@ -30,13 +30,11 @@ class AssessmentApiTests(APITestCase):
         for n in range(1, 6):
             self.answer(kind, token, n, 3)
 
-    def test_quiz_link_works_for_one_week_after_it_is_sent(self):
+    def test_the_questions_never_close_even_long_after_they_were_sent(self):
         url = self.url("joiner", self.joiner.token)
-        Joiner.objects.filter(pk=self.joiner.pk).update(quiz_link_sent_on=date.today() - timedelta(days=7))
+        Joiner.objects.filter(pk=self.joiner.pk).update(quiz_link_sent_on=date.today() - timedelta(days=30))
         self.assertEqual(self.client.get(url).status_code, 200)
-        Joiner.objects.filter(pk=self.joiner.pk).update(quiz_link_sent_on=date.today() - timedelta(days=8))
-        self.assertEqual(self.client.get(url).status_code, 410)
-        self.assertEqual(self.answer("joiner", self.joiner.token, 1, 3).status_code, 410)
+        self.assertEqual(self.answer("joiner", self.joiner.token, 1, 3).status_code, 200)
 
     def test_after_submitting_the_link_still_shows_their_page(self):
         self.answer_all("joiner", self.joiner.token)
@@ -94,10 +92,13 @@ class AssessmentApiTests(APITestCase):
         self.buddy.refresh_from_db()
         self.assertEqual(self.buddy.pool_status, Buddy.PoolStatus.ACTIVE)
 
-    def test_expired_joiner_link(self):
-        self.joiner.date_of_joining = date.today() - timedelta(days=1)
-        self.joiner.save()
-        self.assertEqual(self.client.get(self.url("joiner", self.joiner.token)).status_code, 410)
+    def test_a_joiner_routed_to_manual_after_joining_can_still_answer_and_gets_matched(self):
+        Joiner.objects.filter(pk=self.joiner.pk).update(
+            date_of_joining=date.today() - timedelta(days=2), compass_status=Joiner.Status.MANUAL)
+        self.assertEqual(self.client.get(self.url("joiner", self.joiner.token)).status_code, 200)
+        self.answer_all("joiner", self.joiner.token)
+        self.assertEqual(self.client.post(self.url("joiner", self.joiner.token, "submit/")).status_code, 200)
+        self.assertTrue(MatchRun.objects.filter(joiner=self.joiner).exists())
 
     def test_unknown_token_is_404(self):
         self.assertEqual(

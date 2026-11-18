@@ -217,8 +217,20 @@ class DemoSignInTests(PortalBase):
         self.assertEqual(self.me().data["kind"], "buddy")
 
     def test_the_joiner_sees_the_day_to_answer_by(self):
+        self.joiner.date_of_joining = date.today() + timedelta(days=20)  # due 7 days before: still ahead
+        self.joiner.save()
         self.client.post(self.URL, {"username": "C1", "kind": "joiner"}, format="json")
-        self.assertIsNotNone(self.me().data["quiz"]["due"])
+        quiz = self.me().data["quiz"]
+        self.assertEqual((quiz["due"], quiz["overdue"]), (date.today() + timedelta(days=13), False))
+
+    def test_past_the_answer_by_day_and_joining_the_questions_stay_open(self):
+        from compass_app.models import Joiner
+        Joiner.objects.filter(candidate_id="C1").update(
+            date_of_joining=date.today() - timedelta(days=2), compass_status=Joiner.Status.MANUAL)
+        self.client.post(self.URL, {"username": "C1", "kind": "joiner"}, format="json")
+        quiz = self.me().data["quiz"]
+        self.assertEqual((quiz["open"], quiz["due"], quiz["overdue"]), (True, None, True))
+        self.assertIn("Answer the five questions", self.me().data["stage"])
 
     def test_it_is_a_404_when_switched_off(self):
         from django.test import override_settings

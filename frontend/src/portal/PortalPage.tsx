@@ -490,17 +490,15 @@ function JoinerDashboard({ me, reload, setInduction }: {
 
             {!quizDone && (
               <Card title="Your questions" tone="amber">
-                {me.quiz.open ? (
-                  <div className="flex flex-wrap items-center justify-between gap-3">
-                    <div>
-                      <p className="text-slate-700">Five short questions, about 2 minutes. They help us find your buddy.</p>
-                      {me.quiz.due && <p className="mt-1 text-sm font-medium text-amber-700">Please answer by {date(me.quiz.due)}.</p>}
-                    </div>
-                    <Link to={me.quiz.link} className={primary}>{me.quiz.status === 'in_progress' ? 'Continue' : 'Start'}</Link>
+                {/* The questions never close: a late answer still finds them a buddy. */}
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <p className="text-slate-700">Five short questions, about 2 minutes. They help us find your buddy.</p>
+                    {me.quiz.due && <p className="mt-1 text-sm font-medium text-amber-700">Please answer by {date(me.quiz.due)}.</p>}
+                    {me.quiz.overdue && <p className="mt-1 text-sm font-medium text-amber-700">Please answer as soon as you can.</p>}
                   </div>
-                ) : (
-                  <p className="text-slate-700">The questions are closed. Please ask the COMPASS team to reopen them.</p>
-                )}
+                  <Link to={me.quiz.link} className={primary}>{me.quiz.status === 'in_progress' ? 'Continue' : 'Start'}</Link>
+                </div>
               </Card>
             )}
 

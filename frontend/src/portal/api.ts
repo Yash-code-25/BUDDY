@@ -12,7 +12,7 @@ export type JoinerMe = Common & {
   kind: 'joiner'
   date_of_joining: string
   stage: string
-  quiz: { status: AssessmentStatus; open: boolean; link: string; due: string | null }
+  quiz: { status: AssessmentStatus; open: boolean; link: string; due: string | null; overdue: boolean }
   buddy: {
     name: string
     role: string

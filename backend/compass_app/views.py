@@ -3,7 +3,7 @@ import logging
 from django.db import transaction
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
-from rest_framework.exceptions import APIException, ValidationError
+from rest_framework.exceptions import ValidationError
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response as ApiResponse
 from rest_framework.views import APIView
@@ -16,23 +16,11 @@ from .models import AuditLog, Buddy, Joiner, QuestionSet, Response, Settings
 logger = logging.getLogger(__name__)
 
 
-class LinkExpired(APIException):
-    status_code = 410
-    default_detail = "This link has expired. Please contact the COMPASS team."
-    default_code = "expired"
-
-
 def load_subject(kind, token):
-    """Return (person, assessment code, first name) for a quiz link."""
+    """Return (person, assessment code, first name) for a quiz link. A joiner's questions never close:
+    one who answers late, even after joining, still gets a match."""
     if kind == "joiner":
         joiner = get_object_or_404(Joiner, token=token)
-        today = timezone.localdate()
-        if today > joiner.date_of_joining:
-            raise LinkExpired()
-        # After submitting, the same link shows their buddy card, so only the quiz itself runs out.
-        submitted = joiner.responses.filter(submitted_at__isnull=False).exists()
-        if not submitted and joiner.quiz_link_expired(today):
-            raise LinkExpired("The questions are closed. Please ask the COMPASS team to reopen them.")
         return joiner, Response.Code.JOINER, emails.first_name(joiner.name)
     if kind == "buddy":
         buddy = get_object_or_404(Buddy, token=token)

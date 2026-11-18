@@ -270,7 +270,7 @@ class JoinerActionView(AdminView):
             if joiner.submitted_response():
                 raise ValidationError("This joiner has already submitted their answers.")
             emails.send_joiner_reminder(joiner, f"manual-{stamp}")
-            joiner.quiz_link_sent_on = timezone.localdate()  # a reminder opens a fresh week
+            joiner.quiz_link_sent_on = timezone.localdate()  # a short-notice joiner gets 2 more days
         elif action == "manual":
             if status not in (S.AWAITING_ASSESSMENT, S.AWAITING_PAIRING, S.ON_HOLD):
                 raise ValidationError("This joiner cannot be routed to manual pairing now.")

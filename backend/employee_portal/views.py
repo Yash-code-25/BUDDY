@@ -60,17 +60,24 @@ def joiner_dashboard(joiner):
     buddy = pairing.buddy if pairing else None
     settings_ = Settings.load()
     office = settings_.office_for(joiner.location)
+    answered = quiz_status == "submitted"
+    due = None if answered else joiner.quiz_due(settings_.manual_cutoff_day)
+    stage = JOINER_STAGE.get(joiner.compass_status, "")
+    if not answered and joiner.compass_status == Joiner.Status.MANUAL:
+        # Routed to manual for not answering: answering now still finds them a buddy.
+        stage = JOINER_STAGE[Joiner.Status.AWAITING_ASSESSMENT]
     return {
         "date_of_joining": joiner.date_of_joining,
-        "stage": JOINER_STAGE.get(joiner.compass_status, ""),
+        "stage": stage,
         "quiz": {
             "status": quiz_status,
-            # Before day 1 and within a week of the "time to answer" email.
-            "open": quiz_status != "submitted" and today <= joiner.date_of_joining
-            and not joiner.quiz_link_expired(today),
+            # The questions never close, even after the answer-by day or joining: a late answer
+            # still gets a match.
+            "open": not answered,
             "link": f"/assess/joiner/{joiner.token}",
-            # The day to answer by (the login email says the same), until they answer.
-            "due": joiner.quiz_due(settings_.manual_cutoff_day) if quiz_status != "submitted" else None,
+            # The day to answer by (the login email says the same), until it passes or they answer.
+            "due": due if due and due >= today else None,
+            "overdue": bool(due and due < today),
         },
         "buddy": {
             "name": buddy.name, "role": buddy.designation, "department": buddy.department,
