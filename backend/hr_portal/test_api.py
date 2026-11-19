@@ -72,11 +72,11 @@ class HrApiTests(APITestCase):
         b = Buddy.objects.get(employee_id="B")
         self.assertEqual((b.active_joiners, b.total_joiners_buddied), (1, 1))
 
-    def test_only_the_buddy_is_told(self):
+    def test_the_joiner_and_the_buddy_are_both_told(self):
         self.confirm("B")
         subjects = {m.to[0]: m.subject for m in mail.outbox}
         self.assertIn("COMPASS buddy", subjects["B@x.com"])
-        self.assertNotIn("y@x.com", subjects)  # the joiner sees their buddy in the Day 1 emails
+        self.assertEqual(subjects["y@x.com"], "Meet your COMPASS Buddy - Buddy B!")
 
     def test_not_top_pick_needs_a_reason(self):
         self.assertEqual(self.confirm("C").status_code, 400)

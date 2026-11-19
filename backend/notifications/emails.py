@@ -5,6 +5,8 @@ the portal's sign-in link with their username and password, where everything is 
 Bodies are written in the light markup of render.py and sent formatted, with a plain-text copy.
 A joiner gets five emails before joining (welcome, login details, our story, Day 1, see you
 tomorrow; see prejoining.py) and the buddy review after their induction."""
+import logging
+
 from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.core.mail import send_mail
@@ -13,6 +15,8 @@ from django.utils import timezone
 
 from .models import Notification
 from .render import render
+
+logger = logging.getLogger(__name__)
 
 SIGN_OFF = "Team United\nUnited Group"
 
@@ -187,8 +191,41 @@ def send_buddy_retake(buddy, stamp: str) -> bool:
 # ---------- assigning a buddy ----------
 
 def send_assignment(pairing) -> None:
-    """Tell the buddy. The pairing is already active: nobody has to accept. The joiner sees their
-    buddy in their portal and in the Day 1 and See you tomorrow emails."""
+    """Tell the joiner who their buddy is, and the buddy who their joiner is. The pairing is already
+    active: nobody has to accept. Each email is sent on its own, so a problem with one still sends
+    the other."""
+    try:
+        send_buddy_to_joiner(pairing)
+    except Exception:
+        logger.exception("Could not email the joiner about pairing %s", pairing.pk)
+    send_joiner_to_buddy(pairing)
+
+
+def send_buddy_to_joiner(pairing) -> bool:
+    """"Meet your COMPASS Buddy": who their buddy is, from Learning & Development. A changed buddy is
+    a new pairing, so the joiner hears about the new one too."""
+    joiner, buddy = pairing.joiner, pairing.buddy
+    who = buddy.name + (f", {buddy.designation}" if buddy.designation else "") + f", {buddy.department} ({buddy.location})"
+    body = (
+        f"Hi {first_name(joiner.name)},\n\n"
+        "We're so glad to have you onboard.\n\n"
+        f"To help you settle in, your colleague {who}, has been assigned as your COMPASS Buddy.\n\n"
+        f"{first_name(buddy.name)} will be your go-to person for everyday questions during your entire "
+        "Induction program. That covers questions like where things are, who to ask for what, and how "
+        "things work around here. No question is too small.\n\n"
+        "Also, your induction agenda is available in COMPASS, so you'll know what's coming up each week.\n\n"
+        f"[[See your buddy and induction in COMPASS|{frontend_url()}/login]]\n\n"
+        "We hope you have a great start, and we're looking forward to seeing you succeed.\n\n"
+        "Warm regards,\nLearning & Development\nUnited Group"
+    )
+    return send_once(
+        f"assigned_joiner:{pairing.pk}", joiner.personal_email, f"Meet your COMPASS Buddy - {buddy.name}!",
+        body, kind="assigned_joiner", joiner=joiner, buddy=buddy, pairing=pairing,
+    )
+
+
+def send_joiner_to_buddy(pairing) -> bool:
+    """You are this joiner's buddy: who they are, and the 4 weeks to help them through."""
     joiner, buddy = pairing.joiner, pairing.buddy
     dates = f"from {pairing.start_date:%d %b %Y} to {pairing.end_date:%d %b %Y}"
     to_buddy = (
@@ -199,7 +236,7 @@ def send_assignment(pairing) -> None:
         "induction progress in COMPASS.\n\n"
         f"{sign_in_line(buddy)}"
     )
-    send_once(
+    return send_once(
         f"assigned_buddy:{pairing.pk}", buddy.email, f"You are {joiner.name}'s COMPASS buddy",
         _email(buddy, to_buddy), kind="assigned_buddy", joiner=joiner, buddy=buddy, pairing=pairing,
     )

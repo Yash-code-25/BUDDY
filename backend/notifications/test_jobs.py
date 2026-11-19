@@ -76,13 +76,25 @@ class AssignmentEmailTests(TestCase):
             joiner=self.joiner, buddy=self.buddy, source=Pairing.Source.SYSTEM, start_date=start, end_date=end,
         )
 
-    def test_only_the_buddy_is_emailed_when_assigned(self):
+    def test_the_joiner_and_the_buddy_are_both_emailed_once_when_assigned(self):
         emails.send_assignment(self.pairing)
-        self.assertEqual([m.to for m in mail.outbox], [["ravi@x.com"]])  # the joiner sees it in Day 1 emails
-        self.assertIn("assigned as the COMPASS buddy for Yash Chavan", mail.outbox[0].body)
-        self.assertNotIn("accept", mail.outbox[0].body.lower())  # nobody is asked, the buddy is told
+        self.assertEqual([m.to for m in mail.outbox], [["C001@x.com"], ["ravi@x.com"]])
+        to_joiner, to_buddy = mail.outbox
+        self.assertEqual(to_joiner.subject, "Meet your COMPASS Buddy - Ravi Rao!")
+        for text in ("Hi Yash,", "your colleague Ravi Rao, Manager, Sales (Mumbai), has been assigned as your COMPASS Buddy",
+                     "Ravi will be your go-to person", "Learning & Development"):
+            self.assertIn(text, to_joiner.body)
+        self.assertNotIn("Team United", to_joiner.body)
+        self.assertIn("assigned as the COMPASS buddy for Yash Chavan", to_buddy.body)
+        self.assertNotIn("accept", to_buddy.body.lower())  # nobody is asked, the buddy is told
         emails.send_assignment(self.pairing)
-        self.assertEqual(len(mail.outbox), 1)  # once only
+        self.assertEqual(len(mail.outbox), 2)  # once only
+
+    def test_a_buddy_without_a_designation_reads_naturally(self):
+        Buddy.objects.filter(pk=self.buddy.pk).update(designation="")
+        self.pairing.refresh_from_db()
+        emails.send_assignment(self.pairing)
+        self.assertIn("your colleague Ravi Rao, Sales (Mumbai), has been", mail.outbox[0].body)
 
     def test_the_admins_are_alerted_when_no_good_match_exists(self):
         Response.submitted(self.joiner, self.qs, [5, 4, 5, 4, 5]).save()

@@ -122,8 +122,9 @@ There is **one login page for everyone**, `/login`.
    (same department and location, same department elsewhere, other departments, weaker matches).
 4. The Program admin reviews the ranked suggestions and **assigns** one. A reason is required if the
    choice is not the top suggestion, is a Weaker match, or carries a Red flag.
-5. The pairing is **active at once**: nobody has to accept. The buddy is emailed that they have been
-   assigned; the joiner sees their buddy in their portal and in emails 4 and 5. For **2 days** after
+5. The pairing is **active at once**: nobody has to accept. Both are emailed at once: the joiner gets
+   "Meet your COMPASS Buddy" (from Learning & Development) and the buddy is told who their joiner is. The
+   joiner also sees their buddy in their portal and in emails 4 and 5. For **2 days** after
    assigning, **Change buddy** on the joiner's page picks someone else (both buddies are told).
 6. The pairing runs **30 days** from the joining date: the **4-week induction**. The joiner sees the
    induction timetable in their portal and ticks each item when it is done. Their buddy sees the same
