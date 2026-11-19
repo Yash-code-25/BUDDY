@@ -14,6 +14,7 @@ from rest_framework.throttling import ScopedRateThrottle
 from rest_framework.views import APIView
 
 from compass_app.induction import current_pairing, progress
+from compass_app.matching import run_match_for_joiner
 from compass_app.models import AuditLog, Buddy, Joiner, MatchRun, Pairing, Settings
 from employee_portal import auth as portal
 from employee_portal.credentials import issue_login
@@ -224,6 +225,15 @@ class JoinerDetailView(AdminView):
     def get(self, request, pk):
         joiner = get_object_or_404(Joiner, pk=pk)
         resp = joiner.submitted_response()
+        # Not given a buddy yet: score the pool again, so buddies who finished (or paused) their
+        # profile since the last run show up (or drop out) on this refresh. Saved only if it changed.
+        waiting = (Joiner.Status.AWAITING_PAIRING, Joiner.Status.MANUAL, Joiner.Status.ON_HOLD)
+        if resp and joiner.compass_status in waiting and current_pairing(joiner) is None:
+            try:
+                run_match_for_joiner(joiner, only_if_changed=True)
+                joiner.refresh_from_db()
+            except Exception:
+                logger.exception("Could not refresh the match for joiner %s", joiner.pk)
         questions, answers = [], []
         if resp:
             qs = list(resp.question_set.questions.all())

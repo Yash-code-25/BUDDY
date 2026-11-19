@@ -239,13 +239,14 @@ def alert_admins(key, subject, body, joiner=None) -> bool:
     return send_once(key, admin_recipients(), subject, body, kind="admin_alert", joiner=joiner)
 
 
-def alert_no_good_match(joiner, tier_reached: str, run_id: int) -> bool:
+def alert_no_good_match(joiner, tier_reached: str) -> bool:
+    """Once per joiner and result, however often their match is refreshed."""
     if tier_reached == "MANUAL":
         detail = "No buddy reached 3 of 5. Please pair this joiner manually."
     else:
         detail = "Only Weaker matches (3 of 5) were found. Please review them."
     return alert_admins(
-        f"no_good_match:{run_id}",
+        f"no_good_match:{joiner.pk}:{tier_reached}",
         f"No Strong or Good match for {joiner.name}",
         f"{joiner.name} joins on {joiner.date_of_joining:%d %b %Y}.\n"
         f"Search reached: {tier_reached}.\n{detail}\n\n"

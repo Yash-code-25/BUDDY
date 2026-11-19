@@ -1,3 +1,4 @@
+import json
 import logging
 
 from django.db import transaction
@@ -53,7 +54,9 @@ def build_pool(joiner: Joiner) -> list:
     return pool
 
 
-def run_match_for_joiner(joiner: Joiner) -> MatchRun:
+def run_match_for_joiner(joiner: Joiner, only_if_changed: bool = False) -> MatchRun:
+    """Score the pool for this joiner and save the result as a new run. With `only_if_changed`, the
+    latest run is kept (and returned) when the pool would give exactly the same result."""
     resp = joiner.submitted_response()
     if resp is None:
         raise ValueError(f"{joiner.name} has not submitted CMP-NJ yet.")
@@ -66,10 +69,16 @@ def run_match_for_joiner(joiner: Joiner) -> MatchRun:
         manager_id=joiner.reporting_manager_id, manager_chain=chain,
     )
     result = run_match(engine_joiner, build_pool(joiner), load_match_settings())
+    # As stored: a JSON round trip turns the tier numbers into "1", "2", "3", like a saved run.
+    results = json.loads(json.dumps(result.to_dict()))
+    if only_if_changed:
+        last = MatchRun.objects.filter(joiner=joiner).order_by("-run_time", "-pk").first()
+        if last is not None and last.results == results:
+            return last
 
     with transaction.atomic():
         run = MatchRun.objects.create(
-            joiner=joiner, tier_reached=result.tier_reached, results=result.to_dict(),
+            joiner=joiner, tier_reached=result.tier_reached, results=results,
         )
         open_states = (
             Joiner.Status.AWAITING_ASSESSMENT, Joiner.Status.AWAITING_PAIRING, Joiner.Status.MANUAL,
@@ -85,7 +94,7 @@ def run_match_for_joiner(joiner: Joiner) -> MatchRun:
     # No Strong or Good match: tell the admins. A failed email must not undo the match run.
     if result.tier_reached in ("FALLBACK", "MANUAL"):
         try:
-            emails.alert_no_good_match(joiner, result.tier_reached, run.pk)
+            emails.alert_no_good_match(joiner, result.tier_reached)
         except Exception:
             logger.exception("Could not send the no-match alert for joiner %s", joiner.pk)
     return run
