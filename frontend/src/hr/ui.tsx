@@ -3,10 +3,12 @@ import type { ReactNode } from 'react'
 import { AlertCircle, CheckCircle2, Search, SlidersHorizontal, Upload } from 'lucide-react'
 import type { ImportResult } from './api'
 import { useSubmit } from '../useSubmit'
+import { useLockPageScroll } from './helpers'
 import { card, inputCls, linkButton, secondary } from '../styles'
 
 /** A dialog on desktop, and a sheet that slides up from the bottom on a phone. */
 export function Modal({ children, onClose, wide }: { children: ReactNode; onClose: () => void; wide?: boolean }) {
+  useLockPageScroll()
   // Esc closes it, like clicking outside.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose()
@@ -18,7 +20,7 @@ export function Modal({ children, onClose, wide }: { children: ReactNode; onClos
       <div
         role="dialog"
         aria-modal="true"
-        className={`max-h-[92vh] w-full overflow-y-auto rounded-t-2xl bg-white p-5 shadow-xl sm:rounded-lg sm:p-6 ${
+        className={`max-h-[92dvh] w-full min-w-0 overflow-y-auto overscroll-contain rounded-t-2xl bg-white p-5 shadow-xl sm:rounded-lg sm:p-6 ${
           wide ? 'sm:max-w-2xl' : 'sm:max-w-lg'
         }`}
         onClick={(e) => e.stopPropagation()}

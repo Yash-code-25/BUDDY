@@ -104,3 +104,18 @@ export function useLatest() {
     return () => n === seq.current
   }, [])
 }
+
+let openLayers = 0 // dialogs and panels open now; they can overlap while one replaces another
+
+/** While a dialog or side panel is open, the page behind it stays still: on a phone it would
+ *  otherwise scroll or shift under your finger. It is freed when the last one closes. */
+export function useLockPageScroll() {
+  useEffect(() => {
+    openLayers += 1
+    document.body.style.overflow = 'hidden'
+    return () => {
+      openLayers -= 1
+      if (openLayers === 0) document.body.style.overflow = ''
+    }
+  }, [])
+}

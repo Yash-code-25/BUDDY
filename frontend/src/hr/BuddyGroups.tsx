@@ -5,7 +5,7 @@ import { Link } from 'react-router-dom'
 import { errorMessage } from '../api'
 import { buddyAction, getBuddy } from './api'
 import type { BuddyDetail, BuddyGroup } from './api'
-import { PAIRING_OUTCOME, POOL_TONE, pairingDates, useActions } from './helpers'
+import { PAIRING_OUTCOME, POOL_TONE, pairingDates, useActions, useLockPageScroll } from './helpers'
 import { AnswerTiles, Badge, Notice } from './ui'
 import { primary, secondary } from '../styles'
 
@@ -184,6 +184,7 @@ export function BuddyPanel({ id, onClose, onChanged }: { id: number; onClose: ()
   const [buddy, setBuddy] = useState<BuddyDetail | null>(null)
   const { error, setError, message, act: run } = useActions()
   const closeRef = useRef<HTMLButtonElement>(null)
+  useLockPageScroll()
 
   useEffect(() => {
     let cancelled = false
@@ -199,13 +200,8 @@ export function BuddyPanel({ id, onClose, onChanged }: { id: number; onClose: ()
     closeRef.current?.focus()
     const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose()
     document.addEventListener('keydown', onKey)
-    const overflow = document.body.style.overflow
-    document.body.style.overflow = 'hidden' // the page behind does not scroll while the panel is open
-    return () => {
-      document.removeEventListener('keydown', onKey)
-      document.body.style.overflow = overflow
-    }
-  }, [onClose])
+    return () => document.removeEventListener('keydown', onKey)
+  }, [onClose]) // the page behind is kept still by useLockPageScroll above
 
   const act = (action: string, done: string) =>
     run(async () => {
@@ -224,7 +220,7 @@ export function BuddyPanel({ id, onClose, onChanged }: { id: number; onClose: ()
         role="dialog"
         aria-modal="true"
         aria-label={buddy ? `${buddy.name}, buddy` : 'Buddy'}
-        className="flex h-full w-full flex-col bg-white shadow-xl sm:max-w-md"
+        className="flex h-full w-full min-w-0 flex-col bg-white shadow-xl sm:max-w-md"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-start gap-3 border-b border-slate-200 p-4 sm:p-5">
@@ -256,7 +252,7 @@ export function BuddyPanel({ id, onClose, onChanged }: { id: number; onClose: ()
           </button>
         </div>
 
-        <div className="flex-1 space-y-6 overflow-y-auto p-4 sm:p-5">
+        <div className="flex-1 space-y-6 overflow-y-auto overscroll-contain p-4 sm:p-5">
           {error && <Notice>{error}</Notice>}
           {message && <Notice kind="ok">{message}</Notice>}
 

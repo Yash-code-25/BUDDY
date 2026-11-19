@@ -15,7 +15,24 @@
   --color-success-soft: #e6f4ee;
 }
 
+/* Phones: keep the text at the size we set, and never let one long word or web address make the page
+   wider than the screen (the phone would then zoom out and everything looks misaligned). */
+html {
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
+#root {
+  overflow-x: clip; /* a last safety net; unlike hidden, it keeps sticky bars working */
+}
+
+/* A quick second tap on a card or button must not zoom the page (pinch zoom still works). */
+a, button, label, summary, input, select, textarea, [role="button"] {
+  touch-action: manipulation;
+}
+
 body {
+  overflow-wrap: break-word;
   margin: 0;
   background: var(--color-canvas);
   color: #334155;

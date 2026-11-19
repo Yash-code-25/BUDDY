@@ -31,11 +31,12 @@ function Sentence({ row }: { row: AuditRow }) {
 /** "Pool status: Paused → Active", one per changed field. */
 function Change({ c }: { c: AuditChange }) {
   return (
-    <li className="inline-flex flex-wrap items-baseline gap-1 rounded-md bg-slate-50 px-2 py-1 text-xs ring-1 ring-inset ring-slate-200">
+    <li className="inline-flex min-w-0 max-w-full flex-wrap items-baseline gap-1 rounded-md bg-slate-50 px-2 py-1 text-xs ring-1 ring-inset ring-slate-200">
       <span className="text-slate-500">{c.label}:</span>
-      {c.before !== null && <span className={c.after !== null ? 'text-slate-400 line-through' : 'text-slate-600'}>{c.before}</span>}
+      {/* Values can be long web addresses: they wrap anywhere instead of widening the page. */}
+      {c.before !== null && <span className={`min-w-0 [overflow-wrap:anywhere] ${c.after !== null ? 'text-slate-400 line-through' : 'text-slate-600'}`}>{c.before}</span>}
       {c.before !== null && c.after !== null && <span className="text-slate-400" aria-label="changed to">→</span>}
-      {c.after !== null && <span className="font-medium text-ink">{c.after}</span>}
+      {c.after !== null && <span className="min-w-0 font-medium text-ink [overflow-wrap:anywhere]">{c.after}</span>}
     </li>
   )
 }
