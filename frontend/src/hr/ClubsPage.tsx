@@ -122,8 +122,8 @@ function ClubMembers({ club, onClose }: { club: ClubData; onClose: () => void })
                       {initials(j.name)}
                     </span>
                     <span className="min-w-0 flex-1">
-                      <span className="block truncate text-sm font-medium text-ink">{j.name}</span>
-                      <span className="block truncate text-xs text-slate-500">{j.department} · joins {formatDate(j.date_of_joining)}</span>
+                      <span className="block break-words text-sm font-medium text-ink">{j.name}</span>
+                      <span className="block break-words text-xs text-slate-500">{j.department} · joins {formatDate(j.date_of_joining)}</span>
                     </span>
                     <ChevronRight size={16} className="shrink-0 text-slate-300" aria-hidden />
                   </Link>
@@ -152,8 +152,8 @@ function ClubMembers({ club, onClose }: { club: ClubData; onClose: () => void })
                       {initials(b.name)}
                     </span>
                     <span className="min-w-0 flex-1">
-                      <span className="block truncate text-sm font-medium text-ink">{b.name}</span>
-                      <span className="block truncate text-xs text-slate-500">{[b.designation, b.department].filter(Boolean).join(' · ')}</span>
+                      <span className="block break-words text-sm font-medium text-ink">{b.name}</span>
+                      <span className="block break-words text-xs text-slate-500">{[b.designation, b.department].filter(Boolean).join(' · ')}</span>
                     </span>
                     <ChevronRight size={16} className="shrink-0 text-slate-300" aria-hidden />
                   </button>

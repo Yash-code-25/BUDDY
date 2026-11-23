@@ -51,8 +51,8 @@ function BuddyCard({ b, onOpen }: { b: GroupBuddy; onOpen: () => void }) {
       <div className="flex items-start gap-3">
         <Avatar name={b.name} />
         <div className="min-w-0 flex-1">
-          <div className="truncate font-semibold text-brand">{b.name}</div>
-          <div className="truncate text-xs text-slate-500">{b.designation || b.employee_id}</div>
+          <div className="break-words font-semibold text-brand">{b.name}</div>
+          <div className="break-words text-xs text-slate-500">{b.designation || b.employee_id}</div>
         </div>
         <Badge tone={POOL_TONE[b.pool_status] ?? 'slate'}>{b.pool_status_label}</Badge>
       </div>
@@ -65,7 +65,7 @@ function BuddyCard({ b, onOpen }: { b: GroupBuddy; onOpen: () => void }) {
             className="inline-flex max-w-full items-center gap-1.5 rounded-full bg-success-soft px-2.5 py-1 text-xs font-medium text-success"
           >
             <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-success" />
-            <span className="truncate">{j.name}</span>
+            <span className="min-w-0 break-words">{j.name}</span>
           </span>
         ))}
         {b.joiners.length === 0 && b.cmpbd_status === 'completed' && (
@@ -144,11 +144,11 @@ export function BuddyGroupsView({ groups, onOpen }: { groups: BuddyGroup[]; onOp
                 onClick={() => toggle(key)}
                 className="flex w-full flex-wrap items-center justify-between gap-3 rounded-lg bg-white p-4 text-left"
               >
-                <span className="flex items-center gap-3">
+                <span className="flex min-w-0 items-center gap-3">
                   <ChevronRight size={18} aria-hidden className={`shrink-0 text-slate-400 transition-transform ${open ? 'rotate-90' : ''}`} />
-                  <span>
+                  <span className="min-w-0">
                     <span className="block text-xs font-medium uppercase tracking-wide text-success">Buddy group</span>
-                    <span className="block text-lg font-semibold text-ink">{g.department} · {g.location}</span>
+                    <span className="block break-words text-lg font-semibold text-ink">{g.department} · {g.location}</span>
                   </span>
                 </span>
                 <span className="flex flex-wrap gap-1.5">
@@ -228,8 +228,8 @@ export function BuddyPanel({ id, onClose, onChanged }: { id: number; onClose: ()
             <>
               <Avatar name={buddy.name} large />
               <div className="min-w-0 flex-1">
-                <h2 className="truncate text-lg font-semibold text-ink">{buddy.name}</h2>
-                <div className="truncate text-sm text-slate-500">
+                <h2 className="break-words text-lg font-semibold text-ink">{buddy.name}</h2>
+                <div className="break-words text-sm text-slate-500">
                   {[buddy.designation, buddy.department, buddy.location].filter(Boolean).join(' · ')}
                 </div>
                 <div className="mt-2 flex flex-wrap gap-1.5">
