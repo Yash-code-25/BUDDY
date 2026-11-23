@@ -167,6 +167,39 @@ export default function SettingsPage() {
         </div>
       </section>
 
+      <section className={`mb-4 ${panel} ${form.reviews_open_now ? 'border-amber-300 bg-amber-50/60' : ''}`}>
+        <h2 className="mb-1 font-semibold text-slate-700">Buddy review</h2>
+        <p className="mb-3 text-sm text-slate-500">
+          Joiners review their buddy after the 4-week induction, answering each question from 1 (Not at all) to
+          5 (Very much). The joiner's form and Reports use these questions; reviews already sent keep the wording
+          they were answered with.
+        </p>
+        <div className="mb-4 space-y-3">
+          {form.review_questions.map((q, i) => (
+            <Field key={i} label={`Question ${i + 1}`}>
+              <input
+                className={inputCls}
+                maxLength={200}
+                value={q}
+                onChange={(e) => update({ review_questions: form.review_questions.map((old, j) => (j === i ? e.target.value : old)) })}
+              />
+            </Field>
+          ))}
+        </div>
+        <p className="mb-2 text-sm text-slate-500">
+          For testing, let every joiner with a buddy review them now instead of after 4 weeks. Turn it off again
+          when you are done.
+        </p>
+        <label className="flex min-h-10 items-center gap-3 text-sm font-medium text-slate-700">
+          <input type="checkbox" className="h-5 w-5" checked={form.reviews_open_now}
+            onChange={(e) => update({ reviews_open_now: e.target.checked })} />
+          Open buddy reviews now (testing)
+        </label>
+        {form.reviews_open_now && (
+          <p className="mt-2 text-xs font-medium text-amber-800">On: reviews are open before the 4 weeks are over. Save to apply.</p>
+        )}
+      </section>
+
       <section className={`mb-4 ${panel}`}>
         <div className="mb-4 flex flex-wrap items-baseline justify-between gap-2">
           <h2 className="font-semibold text-slate-700">Pre-joining emails</h2>

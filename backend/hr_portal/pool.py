@@ -13,6 +13,7 @@ from . import people
 from .access import AdminView
 from .views import CsvImportView, filter_people, multi
 
+ASSIGNED = "ASSIGNED"  # a choice of the Status filter: buddies looking after a joiner right now
 EDITABLE = ["name", "email", "department", "location", "brand", "designation", "intro"]
 
 
@@ -54,12 +55,19 @@ def buddy_row(buddy, resp):
 
 class BuddyListView(AdminView):
     def get(self, request):
-        return ApiResponse(self.rows(request))
+        from .reports import download  # reports imports this module
+
+        rows = self.rows(request)
+        if request.query_params.get("export"):
+            return download(request, "Buddies", *export_table(rows), "buddies") or ApiResponse(rows)
+        return ApiResponse(rows)
 
     @staticmethod
     def rows(request) -> list:
         """The buddies, narrowed by the filters in the address."""
-        buddies = filter_people(request, Buddy.objects.order_by("name"), "pool_status")
+        buddies = filter_people(request, Buddy.objects.order_by("name"), "pool_status", not_statuses=[ASSIGNED])
+        if ASSIGNED in multi(request, "status"):  # looking after a joiner right now
+            buddies = buddies.filter(pk__in=Pairing.objects.filter(status=Pairing.Status.ACTIVE).values("buddy_id"))
         responses = profile_responses()
         wanted_status = multi(request, "cmpbd")
         # q1=5 or q4=1,2: buddies who gave one of those answers to that question
@@ -76,6 +84,37 @@ class BuddyListView(AdminView):
     def post(self, request):
         buddy = people.create_person(request.data, request.user, people.BUDDIES, "buddy_added")
         return ApiResponse({"id": buddy.pk}, status=201)
+
+
+CMPBD_WORDS = {"completed": "Completed", "in_progress": "In progress", "not_started": "Not started"}
+
+
+def export_table(rows):
+    """Everything about the buddies on screen, for a CSV or Excel file: their details, profile answers
+    in words, and the joiners they look after now."""
+    question_set = QuestionSet.active()
+    questions = list(question_set.questions.all()) if question_set else []
+    responses = profile_responses(question_set) if question_set else {}
+    looking_after = defaultdict(list)
+    for p in (Pairing.objects.filter(buddy_id__in=[r["id"] for r in rows], status=Pairing.Status.ACTIVE)
+              .select_related("joiner").order_by("joiner__name")):
+        looking_after[p.buddy_id].append(p.joiner.name)
+
+    columns = ["Employee ID", "Name", "Email", "Department", "Location", "Brand", "Designation",
+               "Pool status", "Profile", *(q.dimension for q in questions), "Profile submitted",
+               "In pool since", "Looking after now", "Introduction"]
+    table = []
+    for r in rows:
+        resp = responses.get(r["id"])
+        answers = resp.answers() if resp and resp.submitted_at else [None] * len(questions)
+        table.append([
+            r["employee_id"], r["name"], r["email"], r["department"], r["location"], r["brand"], r["designation"],
+            r["pool_status_label"], CMPBD_WORDS.get(r["cmpbd_status"], r["cmpbd_status"]),
+            *(q.label(v) if v is not None else "" for q, v in zip(questions, answers)),
+            resp.submitted_at if resp else None, r["date_added"],
+            ", ".join(looking_after[r["id"]]), r["intro"],
+        ])
+    return columns, table
 
 
 class BuddyGroupsView(AdminView):

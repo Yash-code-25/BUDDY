@@ -19,7 +19,7 @@ class SeedDemoTests(TestCase):
     def test_builds_buddies_joiners_and_an_induction_programme(self):
         self.seed()
         self.assertEqual((Buddy.objects.count(), Joiner.objects.count()), (8, 8))
-        self.assertEqual(set(InductionItem.objects.values_list("week", flat=True)), {1, 2, 3, 4})
+        self.assertEqual(set(InductionItem.objects.values_list("week", "joiner")), {(1, None)})  # common Day 1
 
     def test_every_joiner_still_has_to_answer_and_nobody_is_assigned(self):
         self.seed()

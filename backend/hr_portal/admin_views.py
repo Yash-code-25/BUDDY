@@ -6,6 +6,8 @@ from rest_framework.exceptions import ValidationError
 from rest_framework.response import Response as ApiResponse
 
 from compass_app.models import AuditLog, Buddy, Joiner, Pairing, Settings
+from feedback.questions import COUNT as REVIEW_COUNT
+from feedback.questions import questions as review_questions
 
 from . import audit
 from .access import AdminView
@@ -76,7 +78,25 @@ LINK_FIELDS = {"story_video_links": "Story video", "handbook_links": "Handbook",
 MAX_LINKS = 10
 LINK_LIMITS = {"label": 100, "url": 500}
 LIST_FIELDS = {"departments": ("department", "Departments"), "locations": ("location", "Locations")}
-ALL_FIELDS = [*INT_FIELDS, *TEXT_FIELDS, *EMAIL_FIELDS, *LINK_FIELDS, *LIST_FIELDS, "office_details"]
+BOOL_FIELDS = ["reviews_open_now"]  # for testing: buddy reviews open before the 4 weeks are over
+ALL_FIELDS = [*INT_FIELDS, *TEXT_FIELDS, *EMAIL_FIELDS, *LINK_FIELDS, *LIST_FIELDS, "office_details", *BOOL_FIELDS,
+              "review_questions"]
+REVIEW_QUESTION_LIMIT = 200
+
+
+def clean_review_questions(value) -> list:
+    """The buddy review's questions: always three, none empty."""
+    if not isinstance(value, list) or len(value) != REVIEW_COUNT:
+        raise ValidationError(f"The buddy review needs exactly {REVIEW_COUNT} questions.")
+    out = []
+    for n, question in enumerate(value, start=1):
+        text = " ".join(str(question or "").split())
+        if not text:
+            raise ValidationError(f"Buddy review question {n} cannot be empty.")
+        if len(text) > REVIEW_QUESTION_LIMIT:
+            raise ValidationError(f"Buddy review question {n} can be at most {REVIEW_QUESTION_LIMIT} characters.")
+        out.append(text)
+    return out
 OFFICE_LIMITS = {"address": 300, "map_link": 500}
 
 
@@ -147,7 +167,7 @@ def clean_list(value, field, label) -> list:
 
 
 def settings_payload(s: Settings) -> dict:
-    return {f: getattr(s, f) for f in ALL_FIELDS}
+    return {**{f: getattr(s, f) for f in ALL_FIELDS}, "review_questions": review_questions(s)}
 
 
 class SettingsView(AdminView):
@@ -186,6 +206,12 @@ class SettingsView(AdminView):
             new[field] = clean_list(request.data.get(field, before[field]), person_field, label)
         new["office_details"] = clean_offices(request.data.get("office_details", before["office_details"]),
                                               new["locations"])
+        new["review_questions"] = clean_review_questions(request.data.get("review_questions", before["review_questions"]))
+        for field in BOOL_FIELDS:
+            value = request.data.get(field, before[field])
+            if not isinstance(value, bool):
+                raise ValidationError(f"{field.replace('_', ' ').capitalize()} must be true or false.")
+            new[field] = value
 
         if not new["strong_threshold"] >= new["good_threshold"] >= new["weaker_threshold"]:
             raise ValidationError("Strong, Good and Weaker thresholds must be in that order, high to low.")

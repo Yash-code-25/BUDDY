@@ -23,6 +23,19 @@ def default_locations():
     return list(DEFAULT_LOCATIONS)
 
 
+# The buddy review after the 4-week induction: three questions, each scored 1 to 5. The Program
+# admin rewords them on the Settings page.
+DEFAULT_REVIEW_QUESTIONS = [
+    "Made me feel welcomed",
+    "Introduced me to the right people",
+    "Answered questions, or found who could answer them for me",
+]
+
+
+def default_review_questions():
+    return list(DEFAULT_REVIEW_QUESTIONS)
+
+
 # Easy to read and type: no 0/O, 1/l/I.
 PASSWORD_LETTERS = "ABCDEFGHJKMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789"
 
@@ -66,6 +79,9 @@ class Settings(models.Model):
     contact_phone = models.CharField(max_length=50, blank=True)
     # The office each location's joiners report to on Day 1: {"Pune": {"address": ..., "map_link": ...}}.
     office_details = models.JSONField(default=dict, blank=True)
+    # For testing: joiners with a buddy can review them now, not only after the 4-week induction.
+    reviews_open_now = models.BooleanField(default=False)
+    review_questions = models.JSONField(default=default_review_questions)  # always three
 
     class Meta:
         verbose_name_plural = "Settings"
@@ -196,6 +212,22 @@ class Buddy(Employee):
         verbose_name_plural = "Buddies"
 
 
+class LiveJoiners(models.Manager):
+    """Joiners who have not been deleted. Every screen, email, match and report uses this; only the
+    Joiners table (filtered to Deleted) and a deleted joiner's own page use `all_objects`."""
+
+    def get_queryset(self):
+        return super().get_queryset().exclude(compass_status=Joiner.Status.DELETED)
+
+
+class LivePairings(models.Manager):
+    """Pairings of joiners who have not been deleted: a deleted joiner leaves no trace on buddies,
+    reports or reviews."""
+
+    def get_queryset(self):
+        return super().get_queryset().exclude(joiner__compass_status=Joiner.Status.DELETED)
+
+
 class Joiner(Employee):
     class Status(models.TextChoices):
         AWAITING_ASSESSMENT = "AWAITING_ASSESSMENT", "Awaiting assessment"
@@ -204,6 +236,10 @@ class Joiner(Employee):
         MANUAL = "MANUAL", "Manual"
         ON_HOLD = "ON_HOLD", "On hold"
         CLOSED = "CLOSED", "Closed"
+        DELETED = "DELETED", "Deleted"
+
+    objects = LiveJoiners()
+    all_objects = models.Manager()
 
     candidate_id = models.CharField(max_length=50, unique=True)
     personal_email = models.EmailField()
@@ -226,6 +262,9 @@ class Joiner(Employee):
     contact_person = models.CharField(max_length=150, blank=True)
     directions = models.CharField(max_length=300, blank=True)
     attendance_confirmed_at = models.DateTimeField(null=True, blank=True)  # "Yes, I'll be there"
+    # Their Day 1 was changed on their own induction page: they have their own copy of the Day 1 rows
+    # (InductionItem.day_one) and no longer get the common ones.
+    own_day_one = models.BooleanField(default=False)
 
     SHORT_NOTICE_DAYS = 10  # added this close to joining: the short-notice emails
     SHORT_NOTICE_QUIZ_DAYS = 2  # and the quiz is due this many days after its email
@@ -338,6 +377,9 @@ class Pairing(models.Model):
     end_date = models.DateField()  # Day 30
     status = models.CharField(max_length=10, choices=Status.choices, default=Status.ACTIVE)
 
+    objects = LivePairings()
+    all_objects = models.Manager()
+
     def __str__(self):
         return f"{self.joiner} -> {self.buddy}"
 
@@ -355,13 +397,20 @@ class Pairing(models.Model):
 
 
 class InductionItem(models.Model):
-    """One row of the 4-week induction programme. Every joiner follows the same programme from their
-    joining date; the Program admin writes and edits it in COMPASS."""
+    """One row of a 4-week induction plan. A row with no joiner is part of the common Day 1 that every
+    joiner gets; a row with a joiner is that joiner's own plan (Day 2 to the end of week 4). The
+    Program admin writes both in COMPASS."""
+    joiner = models.ForeignKey("Joiner", null=True, blank=True, on_delete=models.CASCADE,
+                               related_name="induction_items")  # empty: common Day 1 for everyone
     week = models.PositiveSmallIntegerField(validators=[MinValueValidator(1), MaxValueValidator(4)])
     day = models.CharField(max_length=40)  # e.g. "Day 1" or "Days 2-3"
     activity = models.CharField(max_length=200)
     owner = models.CharField(max_length=100, blank=True)  # who it is with: buddy, manager, HR, IT
     position = models.PositiveIntegerField(default=0)  # order within the week
+    # A joiner's own copy of a common Day 1 row, made the first time their Day 1 is changed on their
+    # page. From then on they get these copies instead of the common rows.
+    day_one = models.BooleanField(default=False)
+    copied_from = models.ForeignKey("self", null=True, blank=True, on_delete=models.SET_NULL, related_name="+")
 
     class Meta:
         ordering = ["week", "position", "pk"]

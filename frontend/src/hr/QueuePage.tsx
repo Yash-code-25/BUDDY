@@ -1,9 +1,8 @@
 import { useCallback, useState } from 'react'
-import { ChevronRight } from 'lucide-react'
+import { UserRound } from 'lucide-react'
 import { Link, useSearchParams } from 'react-router-dom'
-import { createJoiner, getQueue, importJoiners } from './api'
-import type { QueueRow } from './api'
-import { BAND_TONE, STATUS_TONE, daysLabel, formatDate, optionList, useFilterOptions, useLoad } from './helpers'
+import { createJoiner, exportUrl, getQueue, importJoiners } from './api'
+import { STATUS_TONE, daysLabel, formatDate, optionList, useFilterOptions, useLoad } from './helpers'
 import { PersonDialog } from './PersonDialog'
 import type { FieldSpec } from './PersonDialog'
 import { Badge, DataView, FilterBar, ImportDialog, LoadState, PageTitle } from './ui'
@@ -12,7 +11,7 @@ import { primary, secondary } from '../styles'
 const STATUSES = [
   ['AWAITING_ASSESSMENT', 'Awaiting assessment'], ['AWAITING_PAIRING', 'Awaiting pairing'],
   ['PAIRED', 'Paired'], ['MANUAL', 'Manual'],
-  ['ON_HOLD', 'On hold'], ['CLOSED', 'Closed'],
+  ['ON_HOLD', 'On hold'], ['CLOSED', 'Closed'], ['DELETED', 'Deleted'],
 ]
 
 const MAIN: FieldSpec[] = [
@@ -26,19 +25,6 @@ const MORE: FieldSpec[] = [
   ['contact_person', 'Ask for (at reception)'], ['directions', 'Getting there'],
 ]
 
-function Match({ row }: { row: QueueRow }) {
-  if (!row.tier_reached) return <span className="text-slate-400">Not matched yet</span>
-  return (
-    <span className="inline-flex flex-wrap items-center gap-1.5">
-      {row.best_band ? <Badge tone={BAND_TONE[row.best_band] ?? 'slate'}>{row.best_band}</Badge> : <Badge tone="red">Manual</Badge>}
-      <span className="text-xs text-slate-500">
-        {row.tier_reached === 'MANUAL' ? '' : `tier ${row.tier_reached.toLowerCase()}`}
-        {row.flags_count > 0 ? ` · ${row.flags_count} flag${row.flags_count > 1 ? 's' : ''}` : ''}
-      </span>
-    </span>
-  )
-}
-
 export default function QueuePage() {
   const [params, setParams] = useSearchParams()
   const [adding, setAdding] = useState(false)
@@ -51,7 +37,7 @@ export default function QueuePage() {
   return (
     <div>
       <PageTitle title="Joiners">
-        <button className={secondary} onClick={() => setImporting(true)}>Import CSV</button>
+        <a className={secondary} href={exportUrl('joiners', query, 'xlsx')} title="The joiners these filters show">Export Excel</a>
         <button className={primary} onClick={() => setAdding(true)}>Add joiner</button>
       </PageTitle>
 
@@ -76,6 +62,7 @@ export default function QueuePage() {
           rowKey={(r) => r.id}
           empty="No joiners match these filters."
           columns={[
+            { header: 'Candidate ID', cell: (r) => <span className="whitespace-nowrap text-slate-600">{r.candidate_id}</span> },
             {
               header: 'Joiner',
               cell: (r) => (
@@ -96,11 +83,19 @@ export default function QueuePage() {
                 </div>
               ),
             },
-            { header: 'Match', cell: (r) => <Match row={r} /> },
             { header: 'Status', cell: (r) => <Badge tone={STATUS_TONE[r.status] ?? 'slate'}>{r.status_label}</Badge> },
             {
-              header: '',
-              cell: (r) => <Link className="inline-flex items-center gap-1 whitespace-nowrap text-sm font-semibold text-brand hover:text-brand-dark" to={`/hr/joiners/${r.id}`}>Open <ChevronRight size={16} aria-hidden /></Link>,
+              header: 'Profile',
+              cell: (r) => (
+                <Link
+                  to={`/hr/joiners/${r.id}`}
+                  aria-label={`View ${r.name}'s profile`}
+                  title="View profile"
+                  className="inline-flex h-9 w-9 items-center justify-center rounded-full text-brand hover:bg-brand-soft"
+                >
+                  <UserRound size={18} aria-hidden />
+                </Link>
+              ),
             },
           ]}
           card={(r) => (
@@ -116,7 +111,7 @@ export default function QueuePage() {
                 <span className={r.status === 'AWAITING_PAIRING' && r.days_to_joining <= 3 ? 'font-semibold text-red-600' : 'text-slate-600'}>
                   Joins {daysLabel(r.days_to_joining)}
                 </span>
-                <Match row={r} />
+                <span className="text-xs text-slate-500">{r.candidate_id}</span>
               </div>
               <Link className={`${secondary} mt-3 w-full`} to={`/hr/joiners/${r.id}`}>Review</Link>
             </div>
@@ -130,6 +125,7 @@ export default function QueuePage() {
           submitLabel="Add joiner"
           main={MAIN}
           more={MORE}
+          onUpload={() => setImporting(true)}
           onSubmit={createJoiner}
           onClose={() => setAdding(false)}
           onDone={load}

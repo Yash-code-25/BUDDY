@@ -13,13 +13,14 @@ from rest_framework.response import Response as ApiResponse
 from rest_framework.views import APIView
 
 from compass_app.clubs import INTERESTS, clubs_for, joiners_in_clubs_of
-from compass_app.induction import current_pairing, progress
+from compass_app.induction import belongs_to, current_pairing, progress
 from compass_app.models import (
     AuditLog, Buddy, InductionItem, InductionTick, Joiner, Pairing, QuestionSet, Response, Settings,
 )
 from compass_app.views import current_response, status_of
 from feedback.models import Feedback
-from feedback.questions import QUESTIONS, SCALE, TITLE
+from feedback.questions import COUNT, SCALE, TITLE
+from feedback.questions import questions as review_questions
 from notifications import emails
 
 from .auth import IsBuddy, IsJoiner, IsPortalPerson, PortalAuthentication, people_with_id, sign_in, sign_out
@@ -30,7 +31,7 @@ JOINER_STAGE = {
     Joiner.Status.AWAITING_PAIRING: "Thanks for your answers. We are choosing your buddy.",
     Joiner.Status.MANUAL: "Thanks. We are choosing your buddy.",
     Joiner.Status.ON_HOLD: "We are choosing your buddy.",
-    Joiner.Status.PAIRED: "Your buddy is assigned. Follow your 4-week induction below.",
+    Joiner.Status.PAIRED: "Your buddy is assigned. Follow your 4-week induction in the Induction tab.",
     Joiner.Status.CLOSED: "Your buddy programme has finished. Thank you!",
 }
 
@@ -45,10 +46,11 @@ def review_payload(pairing) -> dict:
     opens_on = pairing.review_opens_on()
     return {
         "opens_on": opens_on,
-        "open": timezone.localdate() >= opens_on,
+        # Settings can open it early, for testing.
+        "open": timezone.localdate() >= opens_on or Settings.load().reviews_open_now,
         "submitted": hasattr(pairing, "review"),
         "title": TITLE,
-        "questions": QUESTIONS,
+        "questions": review_questions(),
         "scale": SCALE,
     }
 
@@ -167,6 +169,8 @@ class InductionTickView(PortalView):
             item = InductionItem.objects.get(pk=item_id)
         except InductionItem.DoesNotExist:
             raise NotFound("That induction item no longer exists.")
+        if not belongs_to(item, joiner):
+            raise NotFound("That induction item no longer exists.")
         if request.data.get("done"):
             InductionTick.objects.get_or_create(joiner=joiner, item=item)
         else:
@@ -184,7 +188,7 @@ class ReviewView(PortalView):
             raise ValidationError("The buddy review opens after your 4-week induction.")
         scores = request.data.get("scores")
         valid = (
-            isinstance(scores, list) and len(scores) == len(QUESTIONS)
+            isinstance(scores, list) and len(scores) == COUNT
             and all(isinstance(s, int) and not isinstance(s, bool) and 1 <= s <= 5 for s in scores)
         )
         if not valid:
@@ -192,7 +196,8 @@ class ReviewView(PortalView):
         comment = str(request.data.get("comment", "")).strip()[:1000]
         try:
             with transaction.atomic():
-                Feedback.objects.create(pairing=pairing, q1=scores[0], q2=scores[1], q3=scores[2], comment=comment)
+                Feedback.objects.create(pairing=pairing, q1=scores[0], q2=scores[1], q3=scores[2], comment=comment,
+                                        questions=review_questions())  # the wording they answered
         except IntegrityError:
             raise ValidationError("You have already reviewed your buddy. Thank you!")
         AuditLog.record("buddy_reviewed", pairing)

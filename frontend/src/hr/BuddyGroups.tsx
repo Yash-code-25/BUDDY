@@ -73,8 +73,7 @@ function BuddyCard({ b, onOpen }: { b: GroupBuddy; onOpen: () => void }) {
         )}
       </div>
 
-      <div className="mt-auto flex items-center justify-between pt-3 text-xs text-slate-500">
-        <span>{b.active_joiners} active · {b.total_joiners} in total</span>
+      <div className="mt-auto flex justify-end pt-3 text-xs">
         <span className="font-medium text-brand">View bonds →</span>
       </div>
     </button>
@@ -84,18 +83,12 @@ function BuddyCard({ b, onOpen }: { b: GroupBuddy; onOpen: () => void }) {
 /** Buddies laid out in groups (department and location), as cards. Clicking a card opens the buddy. */
 export function BuddyGroupsView({ groups, onOpen }: { groups: BuddyGroup[]; onOpen: (id: number) => void }) {
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set())
-  const allCollapsed = collapsed.size === groups.length
 
   function toggle(key: string) {
     const next = new Set(collapsed)
     if (next.has(key)) next.delete(key)
     else next.add(key)
     setCollapsed(next)
-  }
-
-  function jump(g: BuddyGroup) {
-    if (collapsed.has(groupKey(g))) toggle(groupKey(g))
-    document.getElementById(groupId(g))?.scrollIntoView({ behavior: 'smooth', block: 'start' })
   }
 
   if (groups.length === 0) {
@@ -108,29 +101,6 @@ export function BuddyGroupsView({ groups, onOpen }: { groups: BuddyGroup[]; onOp
 
   return (
     <div>
-      <div className="mb-4 flex items-center gap-2">
-        <nav aria-label="Jump to a group" className="-mx-1 flex flex-1 gap-2 overflow-x-auto px-1 py-0.5 [scrollbar-width:none]">
-          {groups.map((g) => (
-            <button
-              key={groupKey(g)}
-              type="button"
-              onClick={() => jump(g)}
-              className="inline-flex min-h-9 shrink-0 items-center gap-2 rounded-full border border-slate-300 bg-white px-3 text-sm text-slate-700 hover:border-brand/50"
-            >
-              {g.department} · {g.location}
-              <span className="rounded-full bg-slate-100 px-1.5 text-xs font-medium text-slate-600">{g.buddies.length}</span>
-            </button>
-          ))}
-        </nav>
-        <button
-          type="button"
-          className="min-h-9 shrink-0 text-sm font-medium text-brand hover:underline"
-          onClick={() => setCollapsed(allCollapsed ? new Set() : new Set(groups.map(groupKey)))}
-        >
-          {allCollapsed ? 'Expand all' : 'Collapse all'}
-        </button>
-      </div>
-
       <div className="space-y-4">
         {groups.map((g) => {
           const key = groupKey(g)
@@ -153,7 +123,6 @@ export function BuddyGroupsView({ groups, onOpen }: { groups: BuddyGroup[]; onOp
                 </span>
                 <span className="flex flex-wrap gap-1.5">
                   <Stat>{g.buddies.length} {g.buddies.length === 1 ? 'buddy' : 'buddies'}</Stat>
-                  <Stat>{g.active_joiners} active {g.active_joiners === 1 ? 'joiner' : 'joiners'}</Stat>
                   {free > 0 && <Stat tone="green">{free} free</Stat>}
                 </span>
               </button>
@@ -258,20 +227,12 @@ export function BuddyPanel({ id, onClose, onChanged }: { id: number; onClose: ()
 
           {buddy && (
             <>
-              <div className="grid grid-cols-3 gap-2 text-center">
-                {[
-                  ['Joiners now', buddy.active_joiners],
-                  ['Joiners in total', buddy.total_joiners],
-                  ['In pool since', buddy.date_added
-                    ? new Date(buddy.date_added).toLocaleDateString('en-GB', { month: 'short', year: 'numeric' })
-                    : '-'],
-                ].map(([label, value]) => (
-                  <div key={label} className="rounded-lg bg-slate-50 p-3">
-                    <div className="text-lg font-semibold text-ink">{value}</div>
-                    <div className="text-xs text-slate-500">{label}</div>
-                  </div>
-                ))}
-              </div>
+              {buddy.date_added && (
+                <p className="text-sm text-slate-500">
+                  In the pool since{' '}
+                  {new Date(buddy.date_added).toLocaleDateString('en-GB', { month: 'short', year: 'numeric' })}
+                </p>
+              )}
 
               <section>
                 <h3 className="mb-2 text-sm font-semibold text-slate-700">Looking after now</h3>

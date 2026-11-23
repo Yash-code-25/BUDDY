@@ -81,6 +81,45 @@ class JoinerTests(AdminBase):
         self.assertEqual(get("status=PAIRED"), [])
         self.assertEqual(self.client.get("/api/hr/joiners/?doj_from=abc").status_code, 400)
 
+    def test_export_has_the_filtered_joiners(self):
+        r = self.client.get("/api/hr/joiners/?location=Pune&export=csv")
+        lines = r.content.decode("utf-8-sig").strip().splitlines()
+        self.assertEqual(len(lines), 2)
+        self.assertIn("Pooja Rao", lines[1])
+        self.assertIn("spreadsheetml", self.client.get("/api/hr/joiners/?export=xlsx")["Content-Type"])
+
+    def test_a_deleted_joiner_shows_only_under_the_deleted_filter(self):
+        b = self.buddies["B"]
+        past = self.pair(self.mumbai, "B")
+        Buddy.objects.filter(pk=b.pk).update(active_joiners=1, total_joiners_buddied=1)
+        url = f"/api/hr/joiners/{self.mumbai.pk}/"
+        mail.outbox.clear()
+
+        self.assertEqual(self.client.delete(url).status_code, 204)
+        names = lambda q="": [r["name"] for r in self.client.get(f"/api/hr/joiners/?{q}").data]
+        self.assertEqual(names(), ["Pooja Rao"])
+        self.assertEqual(names("status=DELETED"), ["Yash Chavan"])
+        detail = self.client.get(url).data  # still opens, read-only
+        self.assertTrue(detail["deleted"])
+        self.assertEqual(self.client.post(f"{url}action/", {"action": "hold"}, format="json").status_code, 404)
+        self.assertEqual(self.client.delete(url).status_code, 404)
+
+        # the buddy is freed and told, and the pairing is gone from their history
+        b.refresh_from_db()
+        self.assertEqual((b.active_joiners, b.total_joiners_buddied), (0, 0))
+        self.assertEqual(Pairing.all_objects.get(pk=past.pk).status, Pairing.Status.CANCELLED)
+        self.assertEqual(self.client.get(f"/api/hr/buddies/{b.pk}/").data["history"], [])
+        self.assertIn("taken out of COMPASS", mail.outbox[0].body)
+        self.assertEqual(self.client.get("/api/hr/reports/summary/").data["total_joiners"], 1)
+
+        # cannot be added again, by form or CSV
+        again = {"candidate_id": "C001", "name": "Yash", "personal_email": "y@x.com", "department": "Sales",
+                 "location": "Mumbai", "date_of_joining": "2026-12-01"}
+        r = self.client.post("/api/hr/joiners/", again, format="json")
+        self.assertIn("was deleted", str(r.data))
+        text = "candidate_id,name,personal_email,department,location,date_of_joining\nC001,Y,y@x.com,Sales,Mumbai,2026-12-01\n"
+        self.assertEqual(len(self.client.post("/api/hr/joiners/import/", {"csv": text}, format="json").data["errors"]), 1)
+
     def test_add_joiner_and_reject_bad_input(self):
         self.assertEqual(self.client.post("/api/hr/joiners/", self.NEW, format="json").status_code, 201)
         self.assertEqual(self.client.post("/api/hr/joiners/", self.NEW, format="json").status_code, 400)
@@ -200,6 +239,10 @@ class BuddyPoolTests(AdminBase):
         self.assertEqual(get("status=PAUSED"), ["N1"])
         self.assertEqual(get("q4=5"), ["B"])
         self.assertEqual(get("q4=1,2"), ["A", "C", "D"])
+        self.pair(self.mumbai, "B")
+        self.pair(self.pune, "C", status=Pairing.Status.CLOSED)  # finished: not assigned now
+        self.assertEqual(get("status=ASSIGNED"), ["B"])
+        self.assertEqual(get("status=ASSIGNED&location=Pune"), [])
 
     def test_actions(self):
         act = lambda b, a: self.client.post(f"/api/hr/buddies/{b.pk}/action/", {"action": a}, format="json")
@@ -210,6 +253,16 @@ class BuddyPoolTests(AdminBase):
         self.assertEqual(act(fresh, "resume").status_code, 400)
         self.assertEqual(act(fresh, "remind").status_code, 200)
         self.assertEqual(act(b, "remove").data["pool_status"], "REMOVED")
+
+    def test_export_has_the_filtered_buddies_with_answers_and_current_joiners(self):
+        self.pair(self.mumbai, "B")
+        r = self.client.get("/api/hr/buddies/?q=Buddy B&export=csv")
+        self.assertEqual(r.status_code, 200)
+        lines = r.content.decode("utf-8-sig").strip().splitlines()
+        self.assertEqual(len(lines), 2)  # header and Buddy B only: the filter applies
+        self.assertIn("Looking after now", lines[0])
+        self.assertIn("Yash Chavan", lines[1])
+        self.assertIn("spreadsheetml", self.client.get("/api/hr/buddies/?export=xlsx")["Content-Type"])
 
     def test_retake_reopens_the_profile_and_reset_clears_it(self):
         b = self.buddies["B"]
@@ -246,21 +299,88 @@ class BuddyPoolTests(AdminBase):
 class InductionAdminTests(AdminBase):
     URL = "/api/hr/induction/"
 
-    def test_add_edit_move_and_remove_rows(self):
-        a = self.client.post(self.URL, {"week": 1, "day": "Day 1", "activity": "Welcome", "owner": "HR"}, format="json").data
-        b = self.client.post(self.URL, {"week": 1, "day": "Day 2", "activity": "Tools"}, format="json").data
-        self.assertEqual([i["activity"] for i in self.client.get(self.URL).data], ["Welcome", "Tools"])
-        self.client.patch(f"{self.URL}{a['id']}/", {"week": 2}, format="json")
+    def test_common_day_1_rows_add_edit_and_remove(self):
+        a = self.client.post(self.URL, {"week": 3, "day": "Workstation", "activity": "Laptop", "owner": "IT"}, format="json").data
+        b = self.client.post(self.URL, {"day": "Tools", "activity": "Teams"}, format="json").data
         self.assertEqual([(i["activity"], i["week"]) for i in self.client.get(self.URL).data],
-                         [("Tools", 1), ("Welcome", 2)])
+                         [("Laptop", 1), ("Teams", 1)])  # the common rows are all Day 1
+        self.client.patch(f"{self.URL}{a['id']}/", {"week": 2, "activity": "Laptop and bag"}, format="json")
+        self.assertEqual(self.client.get(self.URL).data[0]["activity"], "Laptop and bag")
+        self.assertEqual(self.client.get(self.URL).data[0]["week"], 1)
         self.assertEqual(self.client.delete(f"{self.URL}{b['id']}/").status_code, 204)
         self.assertEqual(len(self.client.get(self.URL).data), 1)
         self.assertTrue(AuditLog.objects.filter(action="induction_item_removed").exists())
 
+    def test_each_joiner_has_their_own_plan_after_day_1(self):
+        other = self.pune
+        self.client.post(self.URL, {"day": "Workstation", "activity": "Laptop"}, format="json")
+        url = f"{self.URL}joiners/{self.mumbai.pk}/"
+        self.assertEqual(self.client.post(url, {"week": 2, "day": "Day 6", "activity": "Shadow"}, format="json").status_code, 201)
+        self.client.post(url, {"week": 1, "day": "Day 2", "activity": "Meet the team"}, format="json")
+        plan = self.client.get(url).data["induction"]
+        self.assertEqual([(i["activity"], i["common"]) for i in plan["weeks"][0]["items"]],
+                         [("Laptop", True), ("Meet the team", False)])
+        self.assertEqual([i["activity"] for i in plan["weeks"][1]["items"]], ["Shadow"])
+        theirs = self.client.get(f"{self.URL}joiners/{other.pk}/").data["induction"]
+        self.assertEqual(theirs["total"], 1)  # only the common Day 1
+
+        laptop = InductionItem.objects.get(activity="Laptop")
+        self.mumbai.induction_ticks.create(item=laptop)
+        rows = {r["name"]: r for r in self.client.get(f"{self.URL}joiners/").data}
+        self.assertEqual((rows["Yash Chavan"]["done"], rows["Yash Chavan"]["total"], rows["Yash Chavan"]["percent"]), (1, 3, 33))
+        self.assertEqual((rows["Pooja Rao"]["percent"], rows["Pooja Rao"]["own_items"]), (0, 0))
+        self.assertEqual(self.client.get(self.URL).data[0]["activity"], "Laptop")  # own rows stay off the common list
+
+    def test_day_1_can_be_changed_for_one_joiner_alone(self):
+        welcome = self.client.post(self.URL, {"day": "Day 1", "activity": "Welcome", "owner": "HR"}, format="json").data
+        laptop = self.client.post(self.URL, {"day": "Day 1", "activity": "Laptop", "owner": "IT"}, format="json").data
+        self.mumbai.induction_ticks.create(item_id=welcome["id"])  # ticked before the change
+        plan_url = f"{self.URL}joiners/{self.mumbai.pk}/"
+        day_one = lambda j: [(i["activity"], i["owner"]) for i in
+                             self.client.get(f"{self.URL}joiners/{j.pk}/").data["induction"]["weeks"][0]["items"]]
+
+        # edit a common row on Yash's page: only Yash's Day 1 changes
+        r = self.client.patch(f"{self.URL}{laptop['id']}/?joiner={self.mumbai.pk}",
+                              {"activity": "Laptop and badge", "week": 3}, format="json")
+        self.assertEqual((r.status_code, r.data["week"]), (200, 1))  # a Day 1 row stays in week 1
+        self.assertEqual(day_one(self.mumbai), [("Welcome", "HR"), ("Laptop and badge", "IT")])
+        self.assertEqual(day_one(self.pune), [("Welcome", "HR"), ("Laptop", "IT")])  # everyone else
+        self.assertEqual([i["activity"] for i in self.client.get(self.URL).data], ["Welcome", "Laptop"])
+        plan = self.client.get(plan_url).data["induction"]
+        self.assertTrue(plan["own_day_one"])
+        self.assertEqual((plan["done"], plan["weeks"][0]["items"][0]["done"]), (1, True))  # the tick moved
+
+        # remove one and add one, still for Yash alone; "Day 1" in week 1 joins their Day 1
+        mine = plan["weeks"][0]["items"]
+        self.client.post(plan_url, {"week": 1, "day": "Day 2", "activity": "Team lunch"}, format="json")
+        self.client.post(plan_url, {"week": 1, "day": "Day 1", "activity": "Meet the CEO"}, format="json")
+        self.assertEqual(self.client.delete(f"{self.URL}{mine[1]['id']}/").status_code, 204)
+        self.assertEqual([a for a, _ in day_one(self.mumbai)], ["Welcome", "Meet the CEO", "Team lunch"])
+        self.assertEqual(len(day_one(self.pune)), 2)
+
+        # a common row edited for everyone no longer reaches Yash, and the joiner portal check agrees
+        self.client.patch(f"{self.URL}{welcome['id']}/", {"activity": "Big welcome"}, format="json")
+        self.assertEqual(day_one(self.pune)[0][0], "Big welcome")
+        self.assertEqual(day_one(self.mumbai)[0][0], "Welcome")
+        from compass_app.induction import belongs_to
+        self.mumbai.refresh_from_db()
+        self.assertFalse(belongs_to(InductionItem.objects.get(pk=welcome["id"]), self.mumbai))
+        rows = {r["name"]: r for r in self.client.get(f"{self.URL}joiners/").data}
+        self.assertEqual((rows["Yash Chavan"]["done"], rows["Yash Chavan"]["total"]), (1, 3))
+
+        # back to the common Day 1: the copies go, the tick returns to the common row
+        self.assertEqual(self.client.delete(f"{plan_url}day-one/").status_code, 204)
+        plan = self.client.get(plan_url).data["induction"]
+        self.assertFalse(plan["own_day_one"])
+        self.assertEqual([i["activity"] for i in plan["weeks"][0]["items"]], ["Big welcome", "Laptop", "Team lunch"])
+        self.assertEqual(plan["done"], 1)
+        self.assertTrue(AuditLog.objects.filter(action="induction_day_one_reset").exists())
+
     def test_rows_are_checked(self):
         for bad in ({"week": 5, "day": "Day 1", "activity": "x"}, {"week": 1, "day": "", "activity": "x"},
                     {"week": 1, "day": "Day 1", "activity": " "}):
-            self.assertEqual(self.client.post(self.URL, bad, format="json").status_code, 400, bad)
+            self.assertEqual(self.client.post(f"{self.URL}joiners/{self.mumbai.pk}/", bad, format="json").status_code, 400, bad)
+        self.assertEqual(self.client.post(self.URL, {"day": "", "activity": "x"}, format="json").status_code, 400)
 
 
 class SettingsAndAuditTests(AdminBase):
@@ -307,9 +427,44 @@ class HomeAndReportTests(AdminBase):
 
         reviews = self.client.get("/api/hr/reports/reviews/").data
         self.assertEqual((reviews["rows"][0][1], reviews["buddy_ids"]), ("Buddy B", [self.buddies["B"].pk]))
+        self.assertEqual(reviews["columns"], ["Joiner", "Buddy", "Date", "Q1", "Q2", "Q3", "Total", "Details"])
+        self.assertEqual(reviews["rows"][0][3:7], [5, 4, 5, "14 / 15"])
+        export = self.client.get("/api/hr/reports/reviews/?export=csv").content.decode("utf-8-sig").splitlines()
+        self.assertIn("Made me feel welcomed", export[0])
+        self.assertIn("5,4,5,14 / 15,Kind", export[1])  # each score as a number in the download
+        detail = reviews["details"][0]
+        self.assertEqual([(q["question"], q["score"], q["label"]) for q in detail["questions"]], [
+            ("Made me feel welcomed", 5, "Very much"),
+            ("Introduced me to the right people", 4, "Mostly"),
+            ("Answered questions, or found who could answer them for me", 5, "Very much"),
+        ])
+        self.assertEqual((detail["comment"], detail["total"], detail["max"]), ("Kind", 14, 15))
+        self.assertNotIn("details", buddies_data := self.client.get("/api/hr/reports/buddies/").data)
+        self.assertTrue(buddies_data["rows"])
         buddies = self.client.get("/api/hr/reports/buddies/").data
         bharat = buddies["rows"][[r[0] for r in buddies["rows"]].index("Buddy B")]
         self.assertEqual(bharat[-1], 4.7)
+
+    def test_review_questions_are_worded_in_settings_and_old_reviews_keep_theirs(self):
+        pairing = self.pair(self.mumbai, "B")
+        old = ["Made me feel welcomed", "Introduced me to the right people",
+               "Answered questions, or found who could answer them for me"]
+        Feedback.objects.create(pairing=pairing, q1=5, q2=4, q3=3, questions=old)
+        data = self.client.get("/api/hr/settings/").data
+        self.assertEqual(data["review_questions"], old)
+
+        for bad in (["One", "Two"], ["One", "  ", "Three"], ["x" * 201, "Two", "Three"]):
+            r = self.client.put("/api/hr/settings/", {**data, "review_questions": bad}, format="json")
+            self.assertEqual(r.status_code, 400, bad)
+        new = ["Was friendly", "Showed me around", "Helped with my questions"]
+        r = self.client.put("/api/hr/settings/", {**data, "review_questions": [" Was  friendly ", *new[1:]]}, format="json")
+        self.assertEqual(r.data["review_questions"], new)  # spaces tidied
+        self.assertTrue(AuditLog.objects.filter(action="settings_changed", after__has_key="review_questions").exists())
+
+        reviews = self.client.get("/api/hr/reports/reviews/").data
+        export = self.client.get("/api/hr/reports/reviews/?export=csv").content.decode("utf-8-sig").splitlines()
+        self.assertTrue(export[0].startswith("Joiner,Buddy,Date,Was friendly,"))  # the download uses today's wording
+        self.assertEqual([q["question"] for q in reviews["details"][0]["questions"]], old)  # the review keeps its own
 
     def test_buddies_without_a_profile_are_marked_for_attention(self):
         self.add_buddy("N1", J, status=Buddy.PoolStatus.PAUSED, done=False)

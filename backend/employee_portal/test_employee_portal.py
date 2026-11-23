@@ -7,7 +7,7 @@ from django.core.cache import cache
 from rest_framework.test import APIClient, APITestCase
 from rest_framework.throttling import ScopedRateThrottle
 
-from compass_app.models import Buddy, InductionItem, Joiner, Pairing, Response
+from compass_app.models import Buddy, InductionItem, Joiner, Pairing, Response, Settings
 from compass_app.testing import make_question_set
 from feedback.models import Feedback
 
@@ -35,7 +35,11 @@ class PortalBase(APITestCase):
         self.buddy.set_login_code("222222")
         self.buddy.save()
         Response.submitted(self.buddy, self.qs, [3, 3, 3, 3, 3]).save()
-        self.items = [InductionItem.objects.create(week=w, day=f"Day {w}", activity=f"Thing {w}") for w in (1, 2, 3, 4)]
+        # the common Day 1, then the joiner's own plan for weeks 2 to 4
+        self.items = [InductionItem.objects.create(week=1, day="Day 1", activity="Thing 1")] + [
+            InductionItem.objects.create(week=w, day=f"Day {w * 5}", activity=f"Thing {w}", joiner=self.joiner)
+            for w in (2, 3, 4)
+        ]
 
     def sign_in(self, username, code, client=None):
         return (client or self.client).post("/api/auth/login/", {"username": username, "password": code}, format="json")
@@ -169,6 +173,20 @@ class JoinerPortalTests(PortalBase):
         self.assertEqual(self.me().data["induction"]["done"], 1)
         self.assertEqual(self.client.post(url, {"done": False}, format="json").data["done"], 0)
 
+    def test_the_plan_is_day_1_for_all_then_the_joiners_own(self):
+        other = Joiner.objects.create(
+            name="Amit Shah", candidate_id="C2", personal_email="a@x.com", department="Sales",
+            location="Mumbai", date_of_joining=date.today(),
+        )
+        theirs = InductionItem.objects.create(week=2, day="Day 6", activity="Not yours", joiner=other)
+        self.pair()
+        induction = self.me().data["induction"]
+        self.assertEqual(induction["total"], 4)
+        self.assertEqual([(i["activity"], i["common"]) for i in induction["weeks"][0]["items"]], [("Thing 1", True)])
+        self.assertNotIn("Not yours", str(induction))
+        r = self.client.post(f"/api/portal/induction/{theirs.pk}/", {"done": True}, format="json")
+        self.assertEqual(r.status_code, 404)  # someone else's plan
+
     def test_the_review_opens_after_4_weeks_and_is_sent_once(self):
         pairing = self.pair(joined_days_ago=10)
         self.assertEqual(self.client.post("/api/portal/review/", {"scores": [5, 4, 5]}, format="json").status_code, 400)
@@ -182,6 +200,22 @@ class JoinerPortalTests(PortalBase):
         self.assertTrue(self.me().data["review"]["submitted"])
         again = self.client.post("/api/portal/review/", {"scores": [1, 1, 1]}, format="json")
         self.assertEqual(again.status_code, 400)
+
+    def test_settings_can_open_the_review_early_for_testing(self):
+        self.pair(joined_days_ago=10)
+        review = self.me().data["review"]
+        self.assertFalse(review["open"])
+        self.assertEqual(review["questions"][0], "Made me feel welcomed")
+        self.assertEqual(review["scale"], ["Not at all", "A little", "Somewhat", "Mostly", "Very much"])
+        s = Settings.load()
+        s.reviews_open_now = True
+        s.save()
+        self.assertTrue(self.me().data["review"]["open"])
+        s.review_questions = ["Q one", "Q two", "Q three"]  # reworded in Settings: the form follows
+        s.save()
+        self.assertEqual(self.me().data["review"]["questions"], ["Q one", "Q two", "Q three"])
+        self.assertEqual(self.client.post("/api/portal/review/", {"scores": [1, 3, 5]}, format="json").status_code, 200)
+        self.assertEqual(Feedback.objects.get().questions, ["Q one", "Q two", "Q three"])  # kept with the review
 
 
 class BuddyPortalTests(PortalBase):

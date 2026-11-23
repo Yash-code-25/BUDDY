@@ -11,7 +11,8 @@ SENTENCES = {
     "joiners_imported": "{who} imported joiners from a CSV file",
     "buddies_imported": "{who} imported buddies from a CSV file",
     "joiners_removed": "{who} removed joiners",
-    "joiner_remind": "{who} sent a reminder to {target}",
+    "joiner_deleted": "{who} deleted joiner {target}",
+    "joiner_remind":"{who} sent a reminder to {target}",
     "joiner_manual": "{who} routed {target} to manual pairing",
     "joiner_hold": "{who} put {target} on hold",
     "joiner_release": "{who} released {target} from hold",
@@ -42,6 +43,7 @@ SENTENCES = {
     "induction_item_added": "{who} added induction item {target}",
     "induction_item_edited": "{who} edited induction item {target}",
     "induction_item_removed": "{who} removed induction item {target}",
+    "induction_day_one_reset": "{who} gave {target} the common Day 1 again",
 }
 # Things the person did themselves in their portal: they are the "who".
 BY_THE_PERSON = {"assessment_submitted", "attendance_confirmed", "buddy_reviewed", "profile_reopened"}
@@ -54,7 +56,8 @@ LABELS = {
     "handbook_links": "Handbook links", "linkedin_links": "LinkedIn links", "instagram_links": "Instagram links",
 "contact_phone": "Phone for Day 1 changes", "dress_code": "What to wear",
     "office_details": "Office by location", "joiner_intro": "Joiner welcome text",
-    "buddy_intro": "Buddy welcome text", "end_date": "Ended on", "owner": "With",
+    "buddy_intro": "Buddy welcome text", "reviews_open_now": "Buddy reviews open now (testing)",
+    "review_questions": "Buddy review questions", "end_date": "Ended on", "owner": "With",
     "created": "Added", "updated": "Updated", "errors": "Rows with errors", "removed": "Removed",
 }
 # Ids and bookkeeping that mean nothing to a reader.
@@ -141,7 +144,8 @@ def describe(logs) -> list:
         pk = int(log.object_id) if log.object_id.isdigit() else None
         target, link = None, None
         if kind == "Joiner":
-            target = joiners.get(pk, "a joiner no longer in COMPASS")
+            gone = log.before.get("name") if isinstance(log.before, dict) else None  # a deleted joiner
+            target = joiners.get(pk) or gone or "a joiner no longer in COMPASS"
             link = f"/hr/joiners/{pk}" if pk in joiners else None
         elif kind == "Buddy":
             target = buddies.get(pk, "a buddy no longer in COMPASS")

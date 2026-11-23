@@ -81,10 +81,6 @@ function BuddyDetailPageContent({ id }: { id?: string }) {
           </div>
           <Badge tone={POOL_TONE[buddy.pool_status] ?? 'slate'}>{buddy.pool_status_label}</Badge>
         </div>
-        <div className="mt-2 text-sm text-slate-600">
-          {buddy.active_joiners} active · {buddy.total_joiners} joiners in total
-        </div>
-
         <div className="mt-4 grid grid-cols-2 gap-2 sm:flex sm:flex-wrap">
           {buddy.pool_status === 'ACTIVE' && <button className={secondary} onClick={() => act('pause', 'Paused.')}>Pause</button>}
           {buddy.pool_status !== 'ACTIVE' && buddy.pool_status !== 'REMOVED' && (
@@ -112,14 +108,6 @@ function BuddyDetailPageContent({ id }: { id?: string }) {
                 onClick={() => act('reset', 'Response reset.', 'Reset this buddy\'s answers? They will need to retake the profile.')}
               >
                 Reset response
-              </button>
-            )}
-            {buddy.pool_status !== 'REMOVED' && (
-              <button
-                className="inline-flex min-h-10 items-center justify-center rounded-lg border border-red-300 px-4 py-2 text-sm font-medium text-red-700 hover:bg-red-50"
-                onClick={() => act('remove', 'Removed from the pool.', 'Remove this buddy from the pool?')}
-              >
-                Remove from pool
               </button>
             )}
           </div>
@@ -157,7 +145,7 @@ function BuddyDetailPageContent({ id }: { id?: string }) {
       </details>
 
       <section>
-        <h2 className="mb-3 font-semibold text-slate-700">Joiners they have looked after ({buddy.total_joiners})</h2>
+        <h2 className="mb-3 font-semibold text-slate-700">Joiners they have looked after</h2>
         <DataView
           rows={buddy.history}
           rowKey={(h) => `${h.joiner_id}-${h.assigned_at}`}

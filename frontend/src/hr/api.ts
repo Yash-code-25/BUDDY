@@ -91,13 +91,33 @@ type PairingInfo = {
 }
 
 export type InductionItem = { id: number; week: number; day: string; activity: string; owner: string }
+export type InductionDraft = Omit<InductionItem, 'id'>
 export type InductionProgress = {
   start_date: string
   current_week: number | null // null before day 1
   done: number
   total: number
-  weeks: { week: number; items: (Omit<InductionItem, 'week'> & { done: boolean })[] }[]
+  percent: number
+  own_day_one?: boolean // Day 1 was changed for this joiner alone
+  // common: one of the Day 1 rows every joiner gets; day_one: a Day 1 row, common or the joiner's own copy
+  weeks: { week: number; items: (Omit<InductionItem, 'week'> & { done: boolean; common: boolean; day_one?: boolean })[] }[]
 }
+/** A joiner as the Induction page and the Induction progress report list them. */
+export type InductionJoiner = {
+  id: number
+  name: string
+  candidate_id: string
+  department: string
+  location: string
+  date_of_joining: string
+  status: string
+  buddy: string | null
+  own_items: number // rows in their own plan, after the common Day 1
+  done: number
+  total: number
+  percent: number
+}
+export type InductionPlan = { joiner: Omit<InductionJoiner, 'own_items' | 'done' | 'total' | 'percent'>; induction: InductionProgress }
 
 export type JoinerDetail = {
   joiner: JoinerInfo
@@ -108,6 +128,7 @@ export type JoinerDetail = {
   induction: InductionProgress | null
   reasons: string[]
   settings: { candidates_per_tier: number; close_gap: number }
+  deleted?: boolean // a deleted joiner: their details only, read-only
 }
 
 export type StaffUser = { username: string; name: string }
@@ -170,6 +191,8 @@ export type SettingsData = {
   buddy_intro: string
   departments: string[]
   locations: string[]
+  reviews_open_now: boolean // testing: buddy reviews open before the 4 weeks are over
+  review_questions: string[] // the buddy review's three questions, each scored 1 to 5
 } & EmailSettings
 
 /** What the pre-joining emails show. A blank one leaves its line out of the email. */
@@ -214,6 +237,13 @@ export type ReportTable = {
   buddy_column: number | null // this column names a buddy: clicking it opens the buddy panel
   buddy_ids: (number | null)[] // the buddy for each row
   attention: boolean[] // rows that need someone to act
+  details?: ReviewDetail[] // the reviews table only: each review in full, in row order
+}
+export type ReviewDetail = {
+  questions: { question: string; score: number; label: string }[]
+  total: number
+  max: number // the highest total: 5 for each question
+  comment: string
 }
 export type ReportSummary = {
   total_buddies: number // in the pool, removed ones left out
@@ -253,6 +283,13 @@ export const getFilterOptions = () => call<FilterOptions>('/hr/filters/')
 
 // joiners
 export const getQueue = (query = '') => call<QueueRow[]>(withQuery('/hr/joiners/', query))
+/** The address of a CSV or Excel file of the joiners or buddies these filters show. */
+export const exportUrl = (list: 'joiners' | 'buddies', query: string, kind: 'csv' | 'xlsx') => {
+  const p = new URLSearchParams(query)
+  p.set('export', kind)
+  return `/api/hr/${list}/?${p.toString()}`
+}
+export const deleteJoiner = (id: number) => call(`/hr/joiners/${id}/`, 'DELETE')
 export const createJoiner = (body: Record<string, string>) => call<{ id: number }>('/hr/joiners/', 'POST', body)
 export const importJoiners = (csv: string) => call<ImportResult>('/hr/joiners/import/', 'POST', { csv })
 export const getJoinerDetail = (id: number) => call<JoinerDetail>(`/hr/joiners/${id}/`)
@@ -277,12 +314,20 @@ export const patchBuddy = (id: number, body: Record<string, string>) =>
 export const buddyAction = (id: number, action: string) =>
   call<{ pool_status: string }>(`/hr/buddies/${id}/action/`, 'POST', { action })
 
-// the 4-week induction programme
+// induction: the common Day 1 rows, and each joiner's own plan
 export const getInduction = () => call<InductionItem[]>('/hr/induction/')
-export const addInductionItem = (body: Omit<InductionItem, 'id'>) => call<InductionItem>('/hr/induction/', 'POST', body)
-export const saveInductionItem = (id: number, body: Omit<InductionItem, 'id'>) =>
-  call<InductionItem>(`/hr/induction/${id}/`, 'PATCH', body)
-export const removeInductionItem = (id: number) => call(`/hr/induction/${id}/`, 'DELETE')
+export const addInductionItem = (body: InductionDraft) => call<InductionItem>('/hr/induction/', 'POST', body)
+export const getInductionJoiners = () => call<InductionJoiner[]>('/hr/induction/joiners/')
+export const getInductionPlan = (id: number) => call<InductionPlan>(`/hr/induction/joiners/${id}/`)
+export const addJoinerInductionItem = (id: number, body: InductionDraft) =>
+  call<InductionItem>(`/hr/induction/joiners/${id}/`, 'POST', body)
+// On a joiner's page pass their id: a common Day 1 row is then changed for that joiner alone.
+const itemUrl = (id: number, joinerId?: number) => `/hr/induction/${id}/${joinerId ? `?joiner=${joinerId}` : ''}`
+export const saveInductionItem = (id: number, body: InductionDraft, joinerId?: number) =>
+  call<InductionItem>(itemUrl(id, joinerId), 'PATCH', body)
+export const removeInductionItem = (id: number, joinerId?: number) => call(itemUrl(id, joinerId), 'DELETE')
+/** The joiner goes back to the common Day 1, dropping the changes made for them alone. */
+export const restoreCommonDayOne = (joinerId: number) => call(`/hr/induction/joiners/${joinerId}/day-one/`, 'DELETE')
 
 // reports, settings, audit
 export const getReportSummary = () => call<ReportSummary>('/hr/reports/summary/')

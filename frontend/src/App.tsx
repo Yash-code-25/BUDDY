@@ -5,6 +5,7 @@ import BuddyPoolPage from './hr/BuddyPoolPage'
 import HomePage from './hr/HomePage'
 import HrLayout from './hr/HrLayout'
 import InductionPage from './hr/InductionPage'
+import InductionPlanPage from './hr/InductionPlanPage'
 import MatchReviewPage from './hr/MatchReviewPage'
 import QueuePage from './hr/QueuePage'
 import ReportsPage from './hr/ReportsPage'
@@ -32,6 +33,7 @@ export default function App() {
         <Route path="buddies" element={<BuddyPoolPage />} />
         <Route path="buddies/:id" element={<BuddyDetailPage />} />
         <Route path="induction" element={<InductionPage />} />
+        <Route path="induction/:id" element={<InductionPlanPage />} />
         <Route path="clubs" element={<ClubsPage />} />
         <Route path="reports" element={<ReportsPage />} />
         <Route path="settings" element={<SettingsPage />} />

@@ -102,43 +102,45 @@ function InductionTable({ induction, onTick }: { induction: Induction; onTick?: 
       </div>
       {shown && shown.items.length === 0 && <p className="mt-4 text-sm text-slate-500">Nothing planned this week.</p>}
       {shown && shown.items.length > 0 && (
-        <table className="mt-3 w-full text-left text-sm">
-          <thead className="text-xs text-slate-500">
-            <tr>
-              <th className="py-2 pr-2 font-medium">Day</th>
-              <th className="py-2 pr-2 font-medium">Activity</th>
-              <th className="hidden py-2 pr-2 font-medium sm:table-cell">With</th>
-              <th className="py-2 text-right font-medium">Done</th>
-            </tr>
-          </thead>
-          <tbody>
-            {shown.items.map((item) => (
-              <tr key={item.id} className="border-t border-slate-100 align-top">
-                <td className="whitespace-nowrap py-3 pr-2 text-slate-500">{item.day}</td>
-                <td className={`py-3 pr-2 ${item.done ? 'text-slate-400 line-through' : 'text-slate-800'}`}>
+        // A list, not a table: the day can be a long topic ("Connect & Productivity Tools") and
+        // must wrap on a phone. The joiner taps anywhere on a row to tick it.
+        <ul className="mt-3 divide-y divide-slate-100 text-sm">
+          {shown.items.map((item) => {
+            const body = (
+              <div className="min-w-0 flex-1">
+                <span className="block break-words text-xs font-semibold uppercase tracking-wide text-slate-500">{item.day}</span>
+                <span className={`mt-0.5 block break-words ${item.done ? 'text-slate-400' : 'text-slate-800'}`}>
                   {item.activity}
-                  {item.owner && <span className="block text-xs text-slate-400 no-underline sm:hidden">With {item.owner}</span>}
-                </td>
-                <td className="hidden py-3 pr-2 text-slate-600 sm:table-cell">{item.owner}</td>
-                <td className="py-3 text-right">
-                  {onTick ? (
+                </span>
+                {item.owner && <span className="mt-0.5 block break-words text-xs text-slate-500">With {item.owner}</span>}
+              </div>
+            )
+            return (
+              <li key={item.id}>
+                {onTick ? (
+                  <label className="flex cursor-pointer items-start gap-3 py-3">
                     <input
                       type="checkbox"
-                      className="h-5 w-5 accent-success"
+                      className="mt-0.5 h-5 w-5 shrink-0 accent-success"
                       checked={item.done}
                       onChange={(e) => onTick(item.id, e.target.checked)}
                       aria-label={`Mark "${item.activity}" as done`}
                     />
-                  ) : (
-                    <span className={item.done ? 'text-success' : 'text-slate-300'} aria-label={item.done ? 'Done' : 'Not done'}>
+                    {body}
+                  </label>
+                ) : (
+                  <div className="flex items-start gap-3 py-3">
+                    <span className={`mt-0.5 w-5 shrink-0 text-center ${item.done ? 'text-success' : 'text-slate-300'}`}
+                      aria-label={item.done ? 'Done' : 'Not done'}>
                       {item.done ? '✓' : '–'}
                     </span>
-                  )}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+                    {body}
+                  </div>
+                )}
+              </li>
+            )
+          })}
+        </ul>
       )}
     </div>
   )
@@ -159,7 +161,9 @@ function ReviewForm({ review, buddyName, onSent }: {
 
   return (
     <div className="space-y-5">
-      <p className="text-slate-700">You have finished your 4-week induction. How did {buddyName} help you?</p>
+      <p className="text-slate-700">
+        How much did {buddyName} do each of these during your induction? 1 is Not at all, 5 is Very much.
+      </p>
       {review.questions.map((q, qi) => (
         <fieldset key={q}>
           <legend className="mb-2 font-medium text-slate-800">{qi + 1}. {q}</legend>

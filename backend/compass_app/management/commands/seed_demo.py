@@ -21,22 +21,16 @@ from compass_app.models import (
 from feedback.models import Feedback
 from notifications.models import Notification
 
-# A sample 4-week induction programme. The Program admin edits it on the Induction page.
+# The common Day 1 every joiner gets. Each joiner's own plan (Day 2 onwards) is written on the
+# Induction page.
 INDUCTION = [
-    (1, "Day 1", "Welcome, ID card, laptop and email set-up", "HR and IT"),
-    (1, "Day 1", "Meet your buddy and walk around the office", "Buddy"),
-    (1, "Day 2", "Company overview and values session", "L&D"),
-    (1, "Days 3-5", "Meet your team and understand your role", "Manager"),
-    (2, "Day 6", "Tools and systems training for your role", "Buddy"),
-    (2, "Days 7-8", "Shadow a colleague on day-to-day work", "Buddy"),
-    (2, "Day 9", "Policies: leave, travel, expenses, IT security", "HR"),
-    (2, "Day 10", "Weekly check-in with your buddy", "Buddy"),
-    (3, "Days 11-13", "Take on your first small task", "Manager"),
-    (3, "Day 14", "Meet the teams you will work with most", "Buddy"),
-    (3, "Day 15", "Weekly check-in with your buddy", "Buddy"),
-    (4, "Days 16-18", "Work on a real piece of work end to end", "Manager"),
-    (4, "Day 19", "Agree your goals for the next three months", "Manager"),
-    (4, "Day 20", "Final buddy check-in and induction wrap-up", "Buddy"),
+    ("Work station set up", "This includes your laptop and all relevant accessories that come along (bag and charger).", "IT SPOC"),
+    ("Connect & Productivity Tools", "Make sure you have your Business WhatsApp, MS Outlook, Teams, One Drive, Calendar and Authenticator App set up.", "IT SPOC"),
+    ("Ticketing Tool", "Check that your Admin Helpdesk Portal login details are given to you.", "HR"),
+    ("LMS Access", "Access the United LMS and complete the first day induction essentials.", "Learning & Development"),
+    ("Buddy Introduction", "Your Buddy is your go-to person whenever you need help. Make sure you know who your Buddy is.", "Learning & Development"),
+    ("Admin Orientation", "Meet your local Administration desk: stationery, snacks, courier and insurance.", "Admin"),
+    ("Travel Desk", "Meet the Travel Desk for domestic or international travel.", "Travel Desk"),
 ]
 
 # Buddies have finished their profile, so the match can suggest them, but look after nobody yet.
@@ -120,8 +114,8 @@ class Command(BaseCommand):
         s.locations += [loc for loc in DEFAULT_LOCATIONS if loc not in s.locations]
         s.save()
 
-        for i, (week, day, activity, owner) in enumerate(INDUCTION, start=1):
-            InductionItem.objects.create(week=week, day=day, activity=activity, owner=owner, position=i)
+        for i, (day, activity, owner) in enumerate(INDUCTION, start=1):
+            InductionItem.objects.create(week=1, day=day, activity=activity[:200], owner=owner, position=i)
 
         logins = []
         hobby_rng = random.Random(11)

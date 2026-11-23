@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { errorMessage } from '../api'
 import { getFilterOptions } from './api'
-import type { BuddyDetail, FilterOptions } from './api'
+import type { BuddyDetail, FilterOptions, InductionJoiner } from './api'
 
 export const optionList = (values: string[]) => values.map((v) => ({ value: v, label: v }))
 
@@ -12,6 +12,7 @@ export const STATUS_TONE: Record<string, 'slate' | 'green' | 'blue' | 'amber' | 
   MANUAL: 'red',
   ON_HOLD: 'slate',
   CLOSED: 'slate',
+  DELETED: 'red',
 }
 
 export const POOL_TONE: Record<string, 'green' | 'amber' | 'red'> = {
@@ -118,4 +119,23 @@ export function useLockPageScroll() {
       if (openLayers === 0) document.body.style.overflow = ''
     }
   }, [])
+}
+
+/** "Nov 2026" for a joining date: the Joining month filter. */
+export const joiningMonth = (iso: string) =>
+  new Date(`${iso.slice(0, 7)}-01T00:00`).toLocaleDateString('en-GB', { month: 'short', year: 'numeric' })
+
+/** The filters shared by the Induction page and the Induction progress report, read from the address. */
+export function filterInductionJoiners(rows: InductionJoiner[], params: URLSearchParams) {
+  const q = (params.get('q') ?? '').trim().toLowerCase()
+  const department = params.get('department')
+  const location = params.get('location')
+  const month = params.get('month')
+  const buddy = params.get('buddy')
+  return rows.filter((r) =>
+    (!q || r.name.toLowerCase().includes(q) || r.candidate_id.toLowerCase().includes(q)) &&
+    (!department || r.department === department) &&
+    (!location || r.location === location) &&
+    (!month || joiningMonth(r.date_of_joining) === month) &&
+    (!buddy || (buddy === 'yes') === !!r.buddy))
 }

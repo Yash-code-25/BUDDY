@@ -126,9 +126,10 @@ There is **one login page for everyone**, `/login`.
    "Meet your COMPASS Buddy" (from Learning & Development) and the buddy is told who their joiner is. The
    joiner also sees their buddy in their portal and in emails 4 and 5. For **2 days** after
    assigning, **Change buddy** on the joiner's page picks someone else (both buddies are told).
-6. The pairing runs **30 days** from the joining date: the **4-week induction**. The joiner sees the
-   induction timetable in their portal and ticks each item when it is done. Their buddy sees the same
-   timetable, read only, in their own portal.
+6. The pairing runs **30 days** from the joining date: the **4-week induction**. **Day 1 is common**:
+   every joiner gets the same rows. From Day 2 to the end of week 4 **each joiner has their own plan**,
+   written by the Program admin on the Induction page. The joiner sees their plan in their portal and
+   ticks each item when it is done. Their buddy sees the same plan, read only, in their own portal.
 7. After the 4 weeks the joiner **reviews their buddy**: three questions (1 to 5) and a comment, in
    their portal. Only the Program admins see the answers, in the **Buddy reviews** report.
 8. After Day 30 the pairing closes.
@@ -146,14 +147,16 @@ There is **one login page for everyone**, `/login`.
 * **Buddies** shows the pool in **groups** (department and location). Clicking a buddy, there or on
   any buddy name in **Reports** or on a joiner's page, opens the same panel: the joiners they look
   after now, how many they have had in total, and their past joiners.
-* **Induction** is where the Program admin writes the 4-week programme: a table of week, day,
-  activity and who it is with. Every joiner follows the same programme.
+* **Induction** holds the common **Day 1** rows (every joiner gets them) and a list of all joiners
+  with filters. Opening a joiner shows only their 4-week plan: the common Day 1, then their own rows
+  (week, day, activity and who it is with), which are added and edited there.
 * **Settings** holds the lists of **departments and locations**. Joiners and buddies are given one of
   each from a drop-down, and the CSV imports refuse anything else ("sales" is stored as "Sales"), so
   the match never misses a buddy because of a typo. One that people still have cannot be removed.
 * **Reports**: four numbers at a glance (total buddies, total joiners, total assigned a buddy,
   average buddy review; each opens the matching list), then two plain tables:
-  **Buddies** and **Buddy reviews**. Buddies with no profile yet are highlighted; each table has a
+  **Buddies**, **Buddy reviews** and **Joiner review** (every joiner with the % of their induction
+  ticked; **View** shows their whole plan and what they ticked). Buddies with no profile yet are highlighted; each table has a
   search box and Excel/CSV downloads. Joiners are on the Joiners page.
 
 In development the emails print in the terminal that runs `runserver`, and every email sent is listed

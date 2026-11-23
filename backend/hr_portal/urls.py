@@ -29,6 +29,9 @@ urlpatterns = [
     # the 4-week induction programme
     path("induction/", induction.InductionListView.as_view()),
     path("induction/<int:pk>/", induction.InductionItemView.as_view()),
+    path("induction/joiners/", induction.InductionJoinersView.as_view()),
+    path("induction/joiners/<int:pk>/", induction.InductionJoinerView.as_view()),
+    path("induction/joiners/<int:pk>/day-one/", induction.InductionJoinerDayOneView.as_view()),
 
     # reports, settings, audit
     path("reports/summary/", reports.ReportSummaryView.as_view()),

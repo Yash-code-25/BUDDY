@@ -1,7 +1,7 @@
 import { useCallback, useMemo, useState } from 'react'
 import { StickyNote } from 'lucide-react'
-import { Link, useParams } from 'react-router-dom'
-import { assignBuddy, getJoinerDetail, joinerAction, saveDayOne } from './api'
+import { Link, useNavigate, useParams } from 'react-router-dom'
+import { assignBuddy, deleteJoiner, getJoinerDetail, joinerAction, saveDayOne } from './api'
 import type { Candidate, DayOne, Flag, InductionProgress, JoinerDetail, JoinerNote } from './api'
 import { errorMessage } from '../api'
 import { BAND_TONE, STATUS_TONE, daysLabel, formatDate, useLoad } from './helpers'
@@ -292,6 +292,7 @@ function JoinerActions({ detail, onDone }: { detail: JoinerDetail; onDone: () =>
   const [message, setMessage] = useState<{ ok: boolean; text: string } | null>(null)
   const [noteFor, setNoteFor] = useState<'note' | 'not_required' | null>(null)
   const [note, setNote] = useState('')
+  const navigate = useNavigate()
 
   async function run(action: string, done: string, text = '') {
     try {
@@ -300,6 +301,21 @@ function JoinerActions({ detail, onDone }: { detail: JoinerDetail; onDone: () =>
       setNoteFor(null)
       setNote('')
       onDone()
+    } catch (e) {
+      setMessage({ ok: false, text: errorMessage(e) })
+    }
+  }
+
+  async function remove() {
+    const buddy = detail.pairing?.status === 'ACTIVE' ? ` Their buddy, ${detail.pairing.buddy_name}, will be freed and told.` : ''
+    const sure = window.confirm(
+      `Delete ${joiner.name}?\n\nThey will get no more emails, cannot sign in, and disappear from every page and ` +
+        `report. Only the Joiners list, filtered to Deleted, will show them.${buddy}`,
+    )
+    if (!sure) return
+    try {
+      await deleteJoiner(joiner.id)
+      navigate('/hr/joiners')
     } catch (e) {
       setMessage({ ok: false, text: errorMessage(e) })
     }
@@ -328,6 +344,12 @@ function JoinerActions({ detail, onDone }: { detail: JoinerDetail; onDone: () =>
             run('send_login', 'Login details emailed to the joiner.')}
         >
           Send login details
+        </button>
+        <button
+          className="inline-flex min-h-10 items-center justify-center rounded-lg border border-red-300 px-4 py-2 text-sm font-medium text-red-700 hover:bg-red-50"
+          onClick={remove}
+        >
+          Delete joiner
         </button>
       </div>
       <Notes notes={joiner.notes} />
@@ -473,6 +495,31 @@ function MatchReviewPageContent({ id }: { id?: string }) {
   if (!detail) return <p className="text-slate-500">Loading…</p>
 
   const { joiner, answers, pairing } = detail
+  if (detail.deleted) {
+    return (
+      <div className="space-y-5">
+        <Link to="/hr/joiners?status=DELETED" className="inline-block text-sm text-brand hover:underline">← Deleted joiners</Link>
+        <section className={panel}>
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <h1 className="text-xl font-semibold text-ink">{joiner.name}</h1>
+              <div className="text-sm text-slate-500">
+                {joiner.department} · {joiner.location} · joining date {formatDate(joiner.date_of_joining)}
+              </div>
+              <div className="mt-0.5 text-xs text-slate-400">
+                {[joiner.candidate_id, joiner.designation, joiner.personal_email].filter(Boolean).join(' · ')}
+              </div>
+            </div>
+            <Badge tone="red">{joiner.status_label}</Badge>
+          </div>
+          <p className="mt-4 rounded-lg bg-red-50 px-4 py-3 text-sm text-red-800">
+            This joiner was deleted. They get no emails, cannot sign in, and appear nowhere else in COMPASS.
+          </p>
+          <Notes notes={joiner.notes} />
+        </section>
+      </div>
+    )
+  }
   const perTier = detail.settings.candidates_per_tier
   const topId = run && run.shown.length > 0 ? run.shown[0].buddy_id : null
   const canAct = pairing ? pairing.can_change && changing : joiner.status === 'AWAITING_PAIRING' || joiner.status === 'MANUAL'

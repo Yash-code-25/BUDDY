@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import type { FormEvent } from 'react'
+import { Upload } from 'lucide-react'
 import { useSubmit } from '../useSubmit'
 import { inputCls, primary, secondary } from '../styles'
 import { useFilterOptions } from './helpers'
@@ -31,13 +32,14 @@ export function FormField({ spec: [key, label, type], form, setForm, options }: 
 }
 
 /** The "Add a joiner" and "Add a buddy" dialogs: the main fields, then optional ones under "More details". */
-export function PersonDialog({ title, subtitle, submitLabel, main, more, intro, onSubmit, onClose, onDone }: {
+export function PersonDialog({ title, subtitle, submitLabel, main, more, intro, onUpload, onSubmit, onClose, onDone }: {
   title: string
   subtitle?: string
   submitLabel: string
   main: FieldSpec[]
   more: FieldSpec[]
   intro?: string // label of an optional free-text introduction
+  onUpload?: () => void // offers "upload a CSV file" instead: closes this and opens the upload
   onSubmit: (form: Form) => Promise<unknown>
   onClose: () => void
   onDone: () => void
@@ -61,6 +63,21 @@ export function PersonDialog({ title, subtitle, submitLabel, main, more, intro, 
       <form onSubmit={submit}>
         <h3 className={`${subtitle ? 'mb-1' : 'mb-4'} text-lg font-semibold text-ink`}>{title}</h3>
         {subtitle && <p className="mb-4 text-sm text-slate-500">{subtitle}</p>}
+        {onUpload && (
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-2 rounded-lg bg-slate-50 px-4 py-3 text-sm">
+            <span className="text-slate-600">Adding many at once?</span>
+            <button
+              type="button"
+              className="inline-flex items-center gap-1.5 font-semibold text-brand hover:underline"
+              onClick={() => {
+                onClose()
+                onUpload()
+              }}
+            >
+              <Upload size={16} aria-hidden /> Upload CSV
+            </button>
+          </div>
+        )}
         {error && <Notice>{error}</Notice>}
         <div className="grid gap-3 sm:grid-cols-2">{fields(main)}</div>
         <details className="mt-3">

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
-import { useOutletContext, useSearchParams } from 'react-router-dom'
-import { buddyAction, createBuddy, getBuddies, getBuddyGroups, importBuddies } from './api'
+import { UserRound } from 'lucide-react'
+import { Link, useOutletContext, useSearchParams } from 'react-router-dom'
+import { createBuddy, exportUrl, getBuddies, getBuddyGroups, importBuddies } from './api'
 import type { BuddyGroup, BuddyRow } from './api'
 import { errorMessage } from '../api'
 import { POOL_TONE, optionList, useActions, useFilterOptions, useLatest } from './helpers'
@@ -10,10 +11,11 @@ import { useOpenBuddy } from './useOpenBuddy'
 import { PersonDialog } from './PersonDialog'
 import type { FieldSpec } from './PersonDialog'
 import { Badge, DataView, FilterBar, ImportDialog, Notice, PageTitle, Segmented } from './ui'
-import { primary, rowAction, secondary } from '../styles'
+import { primary, secondary } from '../styles'
 
 const POOL_STATUS = [
-  ['ACTIVE', 'Active'], ['PAUSED', 'Paused'], ['ON_LEAVE', 'On leave'], ['REMOVED', 'Removed'],
+  ['ACTIVE', 'Active'], ['ASSIGNED', 'Assigned a joiner'], ['PAUSED', 'Paused'], ['ON_LEAVE', 'On leave'],
+  ['REMOVED', 'Removed'],
 ]
 const CMPBD = [
   ['not_started', 'Not started'], ['in_progress', 'In progress'],
@@ -28,7 +30,7 @@ const MORE: FieldSpec[] = [['brand', 'Brand'], ['designation', 'Designation']]
 export default function BuddyPoolPage() {
   const [params, setParams] = useSearchParams()
   const [rows, setRows] = useState<BuddyRow[] | null>(null)
-  const { error, setError, message, act: run } = useActions()
+  const { error, setError, message } = useActions()
   const [adding, setAdding] = useState(false)
   const [importing, setImporting] = useState(false)
   const [groups, setGroups] = useState<BuddyGroup[] | null>(null)
@@ -38,7 +40,7 @@ export default function BuddyPoolPage() {
     p.delete('buddy')
     return p.toString()
   })()
-  const view = params.get('view') === 'list' ? 'list' : 'groups'
+  const view = params.get('view') === 'groups' ? 'groups' : 'list'
   const openBuddy = useOpenBuddy()
   const { buddyChanged } = useOutletContext<LayoutContext>()
 
@@ -58,9 +60,9 @@ export default function BuddyPoolPage() {
 
   function setView(next: 'groups' | 'list') {
     const p = new URLSearchParams(params)
-    if (next === 'list') p.set('view', 'list')
+    if (next === 'list') p.delete('view')
     else {
-      p.delete('view')
+      p.set('view', 'groups')
       // Groups has no Pool status or Profile filter, so a choice made in List must not stay hidden in effect.
       p.delete('status')
       p.delete('cmpbd')
@@ -72,21 +74,14 @@ export default function BuddyPoolPage() {
     load()
   }, [load, buddyChanged]) // buddyChanged: the buddy panel paused or resumed someone, so reload
 
-  const act = (row: BuddyRow, action: string, done: string) =>
-    run(async () => {
-      await buddyAction(row.id, action)
-      load()
-    }, `${row.name}: ${done}`)
-
-  // One quick action per buddy: pause an active one, resume a paused one, or chase an unfinished profile.
-  function quick(r: BuddyRow) {
-    if (r.pool_status === 'REMOVED') return null
-    const [action, done, label] =
-      r.pool_status === 'ACTIVE' ? ['pause', 'paused', 'Pause']
-        : r.cmpbd_status === 'completed' ? ['resume', 'resumed', 'Resume']
-          : ['remind', 'reminder sent', 'Remind']
-    return <button className={rowAction} onClick={() => act(r, action, done)}>{label}</button>
-  }
+  const quick = (r: BuddyRow) => (
+    <Link
+      to={`/hr/buddies/${r.id}`}
+      className="inline-flex items-center gap-1.5 whitespace-nowrap text-sm font-semibold text-brand hover:text-brand-dark"
+    >
+      <UserRound size={16} aria-hidden /> View profile
+    </Link>
+  )
 
   const status = (r: BuddyRow) => (
     <span className="inline-flex flex-wrap items-center gap-1.5">
@@ -94,12 +89,11 @@ export default function BuddyPoolPage() {
       {r.cmpbd_status !== 'completed' && <Badge tone="amber">Profile pending</Badge>}
     </span>
   )
-  const load_ = (r: BuddyRow) => `${r.active_joiners} active · ${r.total_joiners} total`
 
   return (
     <div>
       <PageTitle title="Buddies">
-        <button className={secondary} onClick={() => setImporting(true)}>Upload CSV</button>
+        <a className={secondary} href={exportUrl('buddies', query, 'xlsx')} title="The buddies these filters show">Export Excel</a>
         <button className={primary} onClick={() => setAdding(true)}>Add buddy</button>
       </PageTitle>
 
@@ -107,7 +101,7 @@ export default function BuddyPoolPage() {
         <Segmented
           label="Buddies view"
           value={view}
-          options={[{ value: 'groups', label: 'Groups' }, { value: 'list', label: 'List' }]}
+          options={[{ value: 'list', label: 'List' }, { value: 'groups', label: 'Groups' }]}
           onChange={setView}
         />
       </div>
@@ -141,18 +135,32 @@ export default function BuddyPoolPage() {
           rowKey={(r) => r.id}
           empty="No buddies match these filters."
           columns={[
+            { header: 'Employee ID', cell: (r) => <span className="whitespace-nowrap text-slate-600">{r.employee_id}</span> },
             {
               header: 'Buddy',
               cell: (r) => (
                 <div>
                   <button type="button" className="font-medium text-left text-brand hover:underline" onClick={() => openBuddy(r.id)}>{r.name}</button>
-                  <div className="text-xs text-slate-500">{r.department} · {r.location}</div>
+                  <div className="text-xs text-slate-500">{r.department}</div>
                 </div>
               ),
             },
+            { header: 'Location', cell: (r) => <span className="text-slate-600">{r.location}</span> },
+            { header: 'Designation', cell: (r) => <span className="text-slate-600">{r.designation || '-'}</span> },
             { header: 'Status', cell: status },
-            { header: 'Joiners', cell: (r) => <span className="whitespace-nowrap text-slate-600">{load_(r)}</span> },
-            { header: '', cell: quick },
+            {
+              header: 'Profile',
+              cell: (r) => (
+                <Link
+                  to={`/hr/buddies/${r.id}`}
+                  aria-label={`View ${r.name}'s profile`}
+                  title="View profile"
+                  className="inline-flex h-9 w-9 items-center justify-center rounded-full text-brand hover:bg-brand-soft"
+                >
+                  <UserRound size={18} aria-hidden />
+                </Link>
+              ),
+            },
           ]}
           card={(r) => (
             <div>
@@ -160,13 +168,11 @@ export default function BuddyPoolPage() {
                 <div>
                   <button type="button" className="font-semibold text-left text-brand hover:underline" onClick={() => openBuddy(r.id)}>{r.name}</button>
                   <div className="text-xs text-slate-500">{r.department} · {r.location}</div>
+                  <div className="text-xs text-slate-500">{[r.employee_id, r.designation].filter(Boolean).join(' · ')}</div>
                 </div>
                 {status(r)}
               </div>
-              <div className="mt-2 flex items-center justify-between text-sm text-slate-600">
-                <span>{load_(r)}</span>
-                {quick(r)}
-              </div>
+              <div className="mt-2 flex justify-end">{quick(r)}</div>
             </div>
           )}
         />
@@ -180,6 +186,7 @@ export default function BuddyPoolPage() {
           main={MAIN}
           more={MORE}
           intro="Short introduction (shown to the joiner)"
+          onUpload={() => setImporting(true)}
           onSubmit={createBuddy}
           onClose={() => setAdding(false)}
           onDone={load}

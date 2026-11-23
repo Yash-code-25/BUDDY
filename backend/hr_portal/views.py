@@ -16,6 +16,7 @@ from rest_framework.views import APIView
 from compass_app.induction import current_pairing, progress
 from compass_app.matching import run_match_for_joiner
 from compass_app.models import AuditLog, Buddy, Joiner, MatchRun, Pairing, Settings
+from compass_app.models import Response as Answers
 from employee_portal import auth as portal
 from employee_portal.credentials import issue_login
 from notifications import emails
@@ -123,10 +124,12 @@ def joiner_payload(joiner, today):
     }
 
 
-def filter_people(request, queryset, status_field):
-    """The filters joiners and buddies share: department, location, brand, status and name."""
+def filter_people(request, queryset, status_field, not_statuses=()):
+    """The filters joiners and buddies share: department, location, brand, status and name.
+    `not_statuses` are choices of the Status filter that the caller handles itself."""
+    statuses = [v for v in multi(request, "status") if v not in not_statuses]
     for field, values in (("department", multi(request, "department")), ("location", multi(request, "location")),
-                          ("brand", multi(request, "brand")), (status_field, multi(request, "status"))):
+                          ("brand", multi(request, "brand")), (status_field, statuses)):
         if values:
             queryset = queryset.filter(**{f"{field}__in": values})
     if request.query_params.get("q"):
@@ -147,12 +150,36 @@ def filter_joiners(request, queryset):
     return queryset
 
 
+def joiner_export_table(rows):
+    """Everything about the joiners on screen, for a CSV or Excel file."""
+    ids = [r["id"] for r in rows]
+    buddies = {p.joiner_id: p.buddy.name for p in Pairing.objects.filter(
+        joiner_id__in=ids, status=Pairing.Status.ACTIVE).select_related("buddy")}
+    answered = set(Answers.objects.filter(joiner_id__in=ids, submitted_at__isnull=False)
+                   .values_list("joiner_id", flat=True))
+    notes = dict(Joiner.all_objects.filter(pk__in=ids).values_list("pk", "notes"))
+    columns = ["Candidate ID", "Name", "Personal email", "Department", "Location", "Brand", "Function",
+               "Designation", "Designation track", "Reporting manager ID", "Manager", "Date of joining",
+               "Days to joining", "Status", "Answered the questions", "Buddy now", "Reporting time",
+               "Contact person", "Address / directions", "Confirmed for Day 1", "Notes"]
+    table = [[
+        r["candidate_id"], r["name"], r["personal_email"], r["department"], r["location"], r["brand"],
+        r["function"], r["designation"], r["designation_track"], r["reporting_manager_id"], r["manager_name"],
+        r["date_of_joining"], r["days_to_joining"], r["status_label"], "Yes" if r["id"] in answered else "No",
+        buddies.get(r["id"], ""), r["reporting_time"], r["contact_person"], r["directions"],
+        r["attendance_confirmed_at"], notes.get(r["id"], ""),
+    ] for r in rows]
+    return columns, table
+
+
 # ---------- queue, add, import ----------
 
 class JoinerQueueView(AdminView):
     def get(self, request):
         today = timezone.localdate()
-        joiners = filter_joiners(request, Joiner.objects.all()).order_by("date_of_joining", "name")
+        # Deleted joiners show only when the Status filter asks for them.
+        base = Joiner.all_objects if Joiner.Status.DELETED in multi(request, "status") else Joiner.objects
+        joiners = filter_joiners(request, base.all()).order_by("date_of_joining", "name")
         # Only the top suggestion of each joiner's latest run: a whole run lists every buddy scored,
         # which is slow to load for hundreds of joiners.
         runs = {}
@@ -177,6 +204,10 @@ class JoinerQueueView(AdminView):
             if tiers and row["tier_reached"] not in tiers:
                 continue
             rows.append(row)
+        if request.query_params.get("export"):
+            from .reports import download  # reports imports pool, which imports this module
+
+            return download(request, "Joiners", *joiner_export_table(rows), "joiners") or ApiResponse(rows)
         return ApiResponse(rows)
 
     def post(self, request):
@@ -222,8 +253,42 @@ def pairing_payload(pairing):
 
 
 class JoinerDetailView(AdminView):
+    def delete(self, request, pk):
+        """Deletes the joiner: they keep their record, but only the Joiners table (filtered to Deleted)
+        shows it. Their buddy, if they have one, is freed and told."""
+        joiner = get_object_or_404(Joiner, pk=pk)  # a deleted one is not found again
+        with transaction.atomic():
+            joiner = Joiner.objects.select_for_update().get(pk=joiner.pk)
+            pairings = list(Pairing.objects.filter(joiner=joiner).exclude(status=Pairing.Status.CANCELLED))
+            current = next((p for p in pairings if p.status == Pairing.Status.ACTIVE), None)
+            # The buddy's counts leave this joiner out, like every other screen.
+            for p in pairings:
+                active = 1 if p.status == Pairing.Status.ACTIVE else 0
+                Buddy.objects.filter(pk=p.buddy_id).update(
+                    active_joiners=F("active_joiners") - active, total_joiners_buddied=F("total_joiners_buddied") - 1,
+                )
+            if current:
+                current.status = Pairing.Status.CANCELLED
+                current.save(update_fields=["status"])
+            before = joiner.compass_status
+            joiner.compass_status = Joiner.Status.DELETED
+            joiner.save(update_fields=["compass_status"])
+            AuditLog.record("joiner_deleted", joiner, user=request.user, before={"status": before, "name": joiner.name},
+                            after={"status": Joiner.Status.DELETED})
+        if current:
+            try:
+                emails.send_assignment_removed(current, joiner_deleted=True)
+            except Exception:
+                logger.exception("Could not tell the buddy of deleted joiner %s", joiner.pk)
+        return ApiResponse(status=204)
+
     def get(self, request, pk):
-        joiner = get_object_or_404(Joiner, pk=pk)
+        joiner = get_object_or_404(Joiner.all_objects, pk=pk)
+        if joiner.compass_status == Joiner.Status.DELETED:
+            # Read-only: their details only. Nothing is matched, assigned or changed.
+            return ApiResponse({"joiner": joiner_payload(joiner, timezone.localdate()), "questions": [],
+                                "answers": [], "run": None, "pairing": None, "induction": None,
+                                "reasons": [], "settings": {}, "deleted": True})
         resp = joiner.submitted_response()
         # Not given a buddy yet: score the pool again, so buddies who finished (or paused) their
         # profile since the last run show up (or drop out) on this refresh. Saved only if it changed.

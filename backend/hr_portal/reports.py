@@ -13,6 +13,8 @@ from rest_framework.response import Response as ApiResponse
 
 from compass_app.models import Buddy, Joiner, Pairing
 from feedback.models import Feedback
+from feedback.questions import COUNT, SCALE
+from feedback.questions import questions as review_questions
 
 from .access import AdminView
 from .pool import cmpbd_status, profile_responses
@@ -49,14 +51,42 @@ def buddies_table():
     return columns, rows, buddy_ids, attention
 
 
-def reviews_table():
+def asked(feedback, current) -> list:
+    """The questions as this joiner saw them; reviews from before the wording was kept get today's."""
+    return feedback.questions if len(feedback.questions or []) == COUNT else current
+
+
+REVIEW_MAX = 5 * COUNT  # three questions, each out of 5
+
+
+def reviews_table(export=False):
+    """On screen: who, when and the total score; "View details" opens each answer and the comment.
+    The download also has each score (the questions as worded in Settings now) and the comment."""
+    current = review_questions()
     rows, buddy_ids = [], []
     for f in Feedback.objects.select_related("pairing__joiner", "pairing__buddy").order_by("-submitted_at"):
         p = f.pairing
-        rows.append([p.joiner.name, p.buddy.name, f.submitted_at, f.q1, f.q2, f.q3, f.average(), f.comment])
+        total = f"{sum(f.scores())} / {REVIEW_MAX}"
+        if export:
+            rows.append([p.joiner.name, p.buddy.name, f.submitted_at, *f.scores(), total, f.comment])
+        else:
+            rows.append([p.joiner.name, p.buddy.name, f.submitted_at, *f.scores(), total, ""])
         buddy_ids.append(p.buddy_id)
-    columns = ["Joiner", "Buddy", "Date", "Helpful", "Easy to reach", "Would recommend", "Average", "Comment"]
+    # On screen the questions are Q1-Q3 (the full wording is too long for a column head).
+    columns = (["Joiner", "Buddy", "Date", *current, "Total", "Comment"] if export
+               else ["Joiner", "Buddy", "Date", *(f"Q{n}" for n in range(1, COUNT + 1)), "Total", "Details"])
     return columns, rows, buddy_ids, [False] * len(rows)
+
+
+def review_details():
+    """Each review in full, in the table's order: every question as the joiner saw it, with its score in words."""
+    current = review_questions()
+    return [
+        {"questions": [{"question": q, "score": s, "label": SCALE[s - 1]}
+                       for q, s in zip(asked(f, current), f.scores())],
+         "total": sum(f.scores()), "max": REVIEW_MAX, "comment": f.comment}
+        for f in Feedback.objects.order_by("-submitted_at")
+    ]
 
 
 TABLES = {"buddies": ("Buddies", buddies_table),
@@ -102,29 +132,42 @@ def xlsx_response(title, columns, rows, filename):
     return response
 
 
+def download(request, title, columns, rows, name):
+    """The table as a file when the address asks for one (?export=csv or ?export=xlsx), else None."""
+    export = request.query_params.get("export", "")
+    rows = [[fmt(v) for v in row] for row in rows]
+    if export == "csv":
+        out = io.StringIO()
+        out.write("﻿")  # so Excel reads names in other scripts correctly
+        writer = csv.writer(out)
+        writer.writerow(columns)
+        writer.writerows(rows)
+        response = HttpResponse(out.getvalue(), content_type="text/csv; charset=utf-8")
+        response["Content-Disposition"] = f'attachment; filename="compass-{name}.csv"'
+        return response
+    if export == "xlsx":
+        return xlsx_response(title, columns, rows, f"compass-{name}.xlsx")
+    return None
+
+
 class ReportView(AdminView):
     def get(self, request, name):
         if name not in TABLES:
             raise Http404
         title, build = TABLES[name]
-        columns, raw_rows, buddy_ids, attention = build()
+        exporting = request.query_params.get("export") in ("csv", "xlsx")
+        columns, raw_rows, buddy_ids, attention = build(export=True) if name == "reviews" and exporting else build()
         rows = [[fmt(v) for v in row] for row in raw_rows]
 
-        export = request.query_params.get("export", "")
-        if export == "csv":
-            out = io.StringIO()
-            writer = csv.writer(out)
-            writer.writerow(columns)
-            writer.writerows(rows)
-            response = HttpResponse(out.getvalue(), content_type="text/csv; charset=utf-8")
-            response["Content-Disposition"] = f'attachment; filename="compass-{name}.csv"'
-            return response
-        if export == "xlsx":
-            return xlsx_response(title, columns, rows, f"compass-{name}.xlsx")
+        file = download(request, title, columns, rows, name)
+        if file:
+            return file
 
         return ApiResponse({
             "name": name, "title": title, "columns": columns, "rows": rows,
             "buddy_column": next((i for i, c in enumerate(columns) if c == "Buddy"), None),
             "buddy_ids": buddy_ids,
             "attention": attention,  # rows that need someone to act: no buddy yet, or no profile yet
+            # a review row opens the joiner's answers in full
+            **({"details": review_details()} if name == "reviews" else {}),
         })

@@ -137,6 +137,9 @@ def _import(text: str, user, people, check=None) -> dict:
     for number, row in enumerate(read_rows(text), start=2):
         try:
             key, data = clean(row)
+            if model is Joiner and Joiner.all_objects.filter(candidate_id=key,
+                                                             compass_status=Joiner.Status.DELETED).exists():
+                raise RowError(f"Candidate {key} was deleted from COMPASS")
             if check:
                 check(model.objects.filter(**{key_field: key}).first(), data)
         except RowError as e:
@@ -170,8 +173,11 @@ def create_person(row, user, people, action):
         key, data = clean({**row})
     except RowError as e:
         raise ValidationError(str(e))
-    if model.objects.filter(**{key_field: key}).exists():
-        raise ValidationError(f"A {kind} with that {key_field.replace('_', ' ')} already exists.")
+    existing = model._base_manager.filter(**{key_field: key}).first()  # deleted joiners too
+    if existing:
+        deleted = getattr(existing, "compass_status", "") == Joiner.Status.DELETED
+        raise ValidationError(f"A {kind} with that {key_field.replace('_', ' ')} already exists"
+                              + (" and was deleted." if deleted else "."))
     person = model.objects.create(**{key_field: key}, **data, **({created_by: user} if created_by else {}))
     AuditLog.record(action, person, user=user, after={"name": person.name})
     welcome(person, kind)

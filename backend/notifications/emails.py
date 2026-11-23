@@ -242,11 +242,13 @@ def send_joiner_to_buddy(pairing) -> bool:
     )
 
 
-def send_assignment_removed(pairing) -> bool:
-    """The admin changed the buddy: tell the buddy who is no longer assigned."""
+def send_assignment_removed(pairing, joiner_deleted=False) -> bool:
+    """The admin changed the buddy, or deleted the joiner: tell the buddy who is no longer assigned."""
     joiner, buddy = pairing.joiner, pairing.buddy
+    why = (f"{joiner.name} has been taken out of COMPASS" if joiner_deleted
+           else f"COMPASS has changed the buddy for {joiner.name}")
     body = (
-        f"COMPASS has changed the buddy for {joiner.name}, so you no longer need to look after them. "
+        f"{why}, so you no longer need to look after them. "
         "Thank you, and nothing else is needed from you.\n\n"
     )
     return send_once(
